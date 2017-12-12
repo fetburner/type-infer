@@ -90,7 +90,7 @@ Hint Resolve typed_subst_typ.
 Fixpoint typing n s G t :=
   match t with
   | trm_var x =>
-      option_map (pair (n, typ_fvar)) (nth_error (env_subst_typ s G) x)
+      option_map (fun T => (n, typ_fvar, typ_subst s T)) (nth_error G x)
   | trm_abs T1 t =>
       match typing n s (T1 :: G) t with
       | None => None
@@ -116,8 +116,8 @@ Theorem typing_sound t : forall G m n s s' T,
   typed (env_subst_typ s' (env_subst_typ s G)) (trm_subst_typ s' (trm_subst_typ s t)) T.
 Proof.
   induction t as [ x | T1 t | t1 IHt1 t2 IHt2 ]; simpl; intros G m ? s s' T Htyping.
-  - destruct (nth_error (env_subst_typ s G) x) eqn:?; inversion Htyping; subst.
-    rewrite env_subst_typ_fvar. eauto.
+  - destruct (nth_error G x) eqn:?; inversion Htyping; subst.
+    rewrite env_subst_typ_fvar. unfold env_subst_typ. eapply map_nth_error in Heqo. eauto.
   - destruct (typing m s (T1 :: G) t) as [ [ [ ] T2 ] | ] eqn:Heqo; inversion Htyping; subst.
     specialize (IHt _ _ _ _ _ _ Heqo). eauto.
   - destruct (typing m s G t1) as [ [ [ n1 s1 ] T1 ] | ] eqn:Heqo1; inversion Htyping.
@@ -142,9 +142,11 @@ Proof.
   Local Hint Resolve Nat.lt_le_trans le_trans le_S.
   induction t as [ x | T1 t | t1 IHt1 t2 IHt2 ]; intros G m s s' T; inversion 1; intros Henv Htrm; subst; simpl in *.
   - unfold env_subst_typ in *.
-    destruct (nth_error (map (typ_subst s) G) x) as [ T' | ] eqn:Hnth.
-    + exists m, typ_fvar, s', T'. repeat split; eauto.
-      * apply map_nth_error with (f := typ_subst s') in Hnth. congruence.
+    destruct (nth_error G x) as [ T' | ] eqn:Hnth.
+    + apply map_nth_error with (f := typ_subst s) in Hnth.
+      exists m, typ_fvar, s', (typ_subst s T'). repeat split; eauto.
+      * apply map_nth_error with (f := typ_subst s') in Hnth.
+        congruence.
       * inversion 1; eauto.
       * intros ? HIn. apply nth_error_In in Hnth.
         apply Henv. eapply env_ftv_intro; eauto.
