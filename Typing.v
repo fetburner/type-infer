@@ -6,19 +6,6 @@ Definition env := list typ.
 Definition env_ftv (G : env) :=
   fold_right (fun T s => Union _ (typ_fv T) s) (Empty_set _) G.
 
-Definition env_ftv_dec x G :
-  { In _ (env_ftv G) x } + { ~ In _ (env_ftv G) x }.
-Proof.
-  Local Hint Resolve In_Empty_dec In_Union_dec typ_fv_dec.
-  induction G as [ | T ? IHG ]; simpl; eauto.
-Defined.
-
-Lemma env_ftv_finite G : Finite _ (env_ftv G).
-Proof.
-  Local Hint Resolve Empty_is_finite Union_preserves_Finite typ_fv_finite.
-  induction G; simpl; eauto.
-Qed.
-
 Lemma env_ftv_bound G : { x | forall y, In _ (env_ftv G) y -> y <= x }.
 Proof.
   Local Hint Resolve le_trans.
@@ -241,3 +228,4 @@ Proof.
     + apply le_n_S. eapply le_trans; [ | apply Max.le_max_r ]. eauto.
     + congruence.
 Defined.
+

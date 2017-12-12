@@ -13,19 +13,6 @@ Fixpoint trm_ftv t :=
   | trm_app t1 t2 => Union _ (trm_ftv t1) (trm_ftv t2)
   end.
 
-Definition trm_ftv_dec x t :
-  { In _ (trm_ftv t) x } + { ~ In _ (trm_ftv t) x }.
-Proof.
-  Local Hint Resolve In_Empty_dec In_Union_dec typ_fv_dec.
-  induction t as [ | T | ]; simpl; eauto.
-Defined.
-
-Lemma trm_ftv_finite t : Finite _ (trm_ftv t).
-Proof.
-  Local Hint Resolve Empty_is_finite Union_preserves_Finite typ_fv_finite.
-  induction t; simpl; eauto.
-Qed.
-
 Lemma trm_ftv_bound t : { x | forall y, In _ (trm_ftv t) y -> y <= x }.
 Proof.
   Local Hint Resolve le_trans.
@@ -71,3 +58,4 @@ Proof.
   - inversion 1; [ edestruct typ_fv_subst as [ ? [ ] ] | destruct IHt as [ ? [ ] ] ]; eauto with sets.
   - inversion 1; [ destruct IHt1 as [ ? [ ] ] | destruct IHt2 as [ ? [ ] ] ]; eauto with sets.
 Qed.
+
