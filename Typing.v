@@ -205,27 +205,18 @@ Definition typing' G t :
       exists s'', typ_subst s'' T = T' /\ forall x, In _ (Union _ (env_ftv G) (trm_ftv t)) x -> s' x = typ_subst s'' (s x) } } +
   { forall s T, typed (env_subst_typ s G) (trm_subst_typ s t) T -> False }.
 Proof.
-  destruct (env_ftv_bound G) as [ x ].
-  destruct (trm_ftv_bound t) as [ y ].
-  destruct (typing (S (Nat.max x y)) typ_fvar G t) as [ [ [ ? s ] T ] | ] eqn:Htyping.
-  - left. exists s, T. split.
-    + apply typing_sound in Htyping.
-      rewrite env_subst_typ_fvar in Htyping.
-      rewrite trm_subst_typ_fvar in Htyping.
-      assumption.
-    + intros s' T' ?. destruct typing_complete with (m := S (Nat.max x y)) (s := typ_fvar) (s' := s') (G := G) (t := t) (T := T') as [ ? [ ? [ s'' [ T'' [ Htyping' [ ? [ HT [ ? [ ? Hmg ] ] ] ] ] ] ] ] ];
-        intros; repeat (rewrite env_subst_typ_fvar in * || rewrite trm_subst_typ_fvar in *); eauto.
-        * apply le_n_S. eapply le_trans; [ | apply Max.le_max_l ]. eauto.
-        * apply le_n_S. eapply le_trans; [ | apply Max.le_max_r ]. eauto.
-        * rewrite Htyping in Htyping'. inversion Htyping'. subst. exists s''.
-          split; eauto.
-          { inversion 1; subst; apply Hmg; apply le_n_S.
-            - eapply le_trans; [ | apply Max.le_max_l ]. eauto.
-            - eapply le_trans; [ | apply Max.le_max_r ]. eauto. }
-  - right. intros s T ?.  destruct typing_complete with (m := S (Nat.max x y)) (s := typ_fvar) (s' := s) (G := G) (t := t) (T := T) as [ ? [ ? [ ? [ ? [ Htyping' ] ] ] ] ];
-        intros; repeat (rewrite env_subst_typ_fvar in * || rewrite trm_subst_typ_fvar in *); eauto.
-    + apply le_n_S. eapply le_trans; [ | apply Max.le_max_l ]. eauto.
-    + apply le_n_S. eapply le_trans; [ | apply Max.le_max_r ]. eauto.
-    + congruence.
+  assert (H : { x | forall y, In _ (Union _ (env_ftv G) (trm_ftv t)) y -> y < x }).
+  { Local Hint Resolve le_trans.
+    destruct (env_ftv_bound G) as [ x ].
+    destruct (trm_ftv_bound t) as [ y ].
+    destruct (le_ge_dec x y); [ exists (S y) | exists (S x) ]; inversion 1; subst; apply le_n_S; eauto. }
+  destruct H as [ x ].
+  destruct (typing x typ_fvar G t) as [ [ [ ? s ] T ] | ] eqn:Htyping;
+  [ left; exists s, T; split;
+    [ apply typing_sound in Htyping
+    | intros s' T' ?; destruct typing_complete with (m := x) (s := typ_fvar) (s' := s') (G := G) (t := t) (T := T') as [ ? [ ? [ s'' [ T'' [ Htyping' [ ? [ HT [ ? [ ? Hmg ] ] ] ] ] ] ] ] ] ]
+  | right; intros s T ?; destruct typing_complete with (m := x) (s := typ_fvar) (s' := s) (G := G) (t := t) (T := T) as [ ? [ ? [ ? [ ? [ Htyping' ] ] ] ] ] ];
+  intros; repeat (rewrite env_subst_typ_fvar in * || rewrite trm_subst_typ_fvar in *); eauto with sets.
+  - rewrite Htyping in Htyping'. inversion Htyping'. subst. eauto with sets.
+  - congruence.
 Defined.
-
