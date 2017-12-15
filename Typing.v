@@ -58,7 +58,7 @@ Inductive typed : env -> trm -> typ -> Prop :=
       typed G (trm_var x) T
   | typed_abs G t T1 T2 :
       typed (T1 :: G) t T2 ->
-      typed G (trm_abs T1 t) (typ_arrow T1 T2)
+      typed G (trm_abs t) (typ_arrow T1 T2)
   | typed_app G t1 t2 T1 T2 :
       typed G t1 (typ_arrow T1 T2) ->
       typed G t2 T1 ->
@@ -67,28 +67,27 @@ Hint Constructors typed.
 
 Lemma typed_subst_typ s G t T :
   typed G t T ->
-  typed (env_subst_typ s G) (trm_subst_typ s t) (typ_subst s T).
+  typed (env_subst_typ s G) t (typ_subst s T).
 Proof.
   induction 1; simpl; eauto.
   constructor. apply map_nth_error. eauto.
 Qed.
 Hint Resolve typed_subst_typ.
 
-Fixpoint typing n s G t :=
+Fixpoint typing n G t :=
   match t with
-  | trm_var x =>
-      option_map (fun T => (n, typ_fvar, typ_subst s T)) (nth_error G x)
-  | trm_abs T1 t =>
-      match typing n s (T1 :: G) t with
+  | trm_var x => option_map (pair (n, typ_fvar)) (nth_error G x)
+  | trm_abs t =>
+      match typing (S n) (typ_fvar n :: G) t with
       | None => None
-      | Some (n, s1, T2) =>
-          Some (n, s1, typ_arrow (typ_subst (fun x => typ_subst s1 (s x)) T1) T2)
+      | Some (n1, s1, T2) =>
+          Some (n1, s1, typ_arrow (s1 n) T2)
       end
   | trm_app t1 t2 =>
-      match typing n s G t1 with
+      match typing n G t1 with
       | None => None
       | Some (n1, s1, T1) =>
-          match typing n1 (fun x => typ_subst s1 (s x)) G t2 with
+          match typing n1 (env_subst_typ s1 G) t2 with
           | None => None
           | Some (n2, s2, T2) =>
               option_map
@@ -98,71 +97,66 @@ Fixpoint typing n s G t :=
       end
   end.
 
-Theorem typing_sound t : forall G m n s s' T,
-  typing m s G t = Some (n, s', T) ->
-  typed (env_subst_typ s' (env_subst_typ s G)) (trm_subst_typ s' (trm_subst_typ s t)) T.
+Theorem typing_sound t : forall G m n s T,
+  typing m G t = Some (n, s, T) ->
+  typed (env_subst_typ s G) t T.
 Proof.
-  induction t as [ x | T1 t | t1 IHt1 t2 IHt2 ]; simpl; intros G m ? s s' T Htyping.
+  induction t as [ x | t | t1 IHt1 t2 IHt2 ]; simpl; intros G m ? s T Htyping.
   - destruct (nth_error G x) eqn:?; inversion Htyping; subst.
-    rewrite env_subst_typ_fvar. unfold env_subst_typ. eapply map_nth_error in Heqo. eauto.
-  - destruct (typing m s (T1 :: G) t) as [ [ [ ] T2 ] | ] eqn:Heqo; inversion Htyping; subst.
-    specialize (IHt _ _ _ _ _ _ Heqo). rewrite <- typ_subst_comp. eauto.
-  - destruct (typing m s G t1) as [ [ [ n1 s1 ] T1 ] | ] eqn:Heqo1; inversion Htyping.
-    specialize (IHt1 _ _ _ _ _ _ Heqo1).
-    destruct (typing n1 (fun x => typ_subst s1 (s x)) G t2) as [ [ [ n2 s2 ] T2 ] | ] eqn:Heqo2; inversion Htyping.
-    specialize (IHt2 _ _ _ _ _ _ Heqo2).
+    rewrite env_subst_typ_fvar. eauto.
+  - destruct (typing (S m) (typ_fvar m :: G) t) as [ [ [ ] T2 ] | ] eqn:Heqo; inversion Htyping; subst.
+    specialize (IHt _ _ _ _ _ Heqo). eauto.
+  - destruct (typing m G t1) as [ [ [ n1 s1 ] T1 ] | ] eqn:Heqo1; inversion Htyping.
+    specialize (IHt1 _ _ _ _ _ Heqo1).
+    destruct (typing n1 (env_subst_typ s1 G) t2) as [ [ [ n2 s2 ] T2 ] | ] eqn:Heqo2; inversion Htyping.
+    specialize (IHt2 _ _ _ _ _ Heqo2).
     destruct (unify [(typ_subst s2 T1, typ_arrow T2 (typ_fvar n2))]) as [ s3 | ] eqn:Heqo3; inversion Htyping.
     apply unify_sound in Heqo3. inversion Heqo3. subst. simpl in *.
-    repeat (rewrite <- env_subst_typ_comp in * || rewrite <- trm_subst_typ_comp in *).
+    repeat rewrite <- env_subst_typ_comp in *.
     apply typed_subst_typ with (s := s2) in IHt1. apply typed_subst_typ with (s := s3) in IHt1. rewrite H6 in *. eauto.
 Qed.
 
-Theorem typing_complete t : forall G m s s' T,
-  typed (env_subst_typ s' (env_subst_typ s G)) (trm_subst_typ s' (trm_subst_typ s t)) T ->
-  (forall n, In _ (env_ftv (env_subst_typ s G)) n -> n < m) ->
-  (forall n, In _ (trm_ftv (trm_subst_typ s t)) n -> n < m) ->
-  exists n s'' s''' T', typing m s G t = Some (n, s'', T') /\ m <= n /\ T = typ_subst s''' T'
-    /\ (forall x m, In _ (typ_fv (s'' x)) m -> x = m \/ m < n)
+Theorem typing_complete t : forall G m s T,
+  typed (env_subst_typ s G) t T ->
+  (forall n, In _ (env_ftv G) n -> n < m) ->
+  exists n s' s'' T', typing m G t = Some (n, s', T') /\ m <= n /\ T = typ_subst s'' T'
+    /\ (forall x m, In _ (typ_fv (s' x)) m -> x = m \/ m < n)
     /\ (forall m, In _ (typ_fv T') m -> m < n)
-    /\ forall n, n < m -> s' n = typ_subst s''' (s'' n).
+    /\ forall n, n < m -> s n = typ_subst s'' (s' n).
 Proof.
   Local Hint Resolve Nat.lt_le_trans le_trans le_S.
-  induction t as [ x | T1 t | t1 IHt1 t2 IHt2 ]; intros G m s s' T; inversion 1; intros Henv Htrm; subst; simpl in *.
+  induction t as [ x | t | t1 IHt1 t2 IHt2 ]; intros G m s T; inversion 1; intros Henv; subst; simpl in *.
   - unfold env_subst_typ in *.
     destruct (nth_error G x) as [ T' | ] eqn:Hnth.
-    + apply map_nth_error with (f := typ_subst s) in Hnth.
-      exists m, typ_fvar, s', (typ_subst s T'). repeat split; eauto.
-      * apply map_nth_error with (f := typ_subst s') in Hnth.
-        congruence.
+    + exists m, typ_fvar, s, T'. repeat split; eauto.
+      * apply map_nth_error with (f := typ_subst s) in Hnth. congruence.
       * inversion 1; eauto.
       * intros ? HIn. apply nth_error_In in Hnth.
         apply Henv. eapply env_ftv_intro; eauto.
     + apply nth_error_None in Hnth.
-      assert (Hnth' : nth_error (map (typ_subst s') (map (typ_subst s) G)) x <> None) by congruence.
+      assert (Hnth' : nth_error (map (typ_subst s) G) x <> None) by congruence.
       apply nth_error_Some in Hnth'. repeat rewrite map_length in *. omega.
-  - destruct (IHt (_ :: _) m _ _ _ H4) as [ n [ s'' [ s''' [ T2' [ Htyping [ ? [ HT [ Hsfv [ ? Hs ] ] ] ] ] ] ] ] ]; eauto with sets.
-    { inversion 1; eauto with sets. }
-    rewrite Htyping. exists n, s'', s''', (typ_arrow (typ_subst s'' (typ_subst s T1)) T2'). rewrite <- typ_subst_comp. simpl. repeat split; eauto.
-    + rewrite HT. f_equal. rewrite typ_subst_comp with (s := s''). apply typ_subst_ext. eauto with sets.
+  - destruct IHt with (G := typ_fvar m :: G) (m := S m) (s := fun x => if lt_dec x m then s x else T1) (T := T2) as [ n [ s' [ s'' [ T2' [ Htyping [ ? [ HT [ Hsfv [ ? Hs ] ] ] ] ] ] ] ] ].
+    { simpl. destruct (lt_dec m m); [ omega | ].
+      rewrite env_subst_typ_ext with (s' := s) by (intros x ?; destruct (lt_dec x m); [ eauto | exfalso; eauto ]).
+      eauto. }
+    { inversion 1; eauto. inversion H1; eauto. }
+    rewrite Htyping. exists n, s', s'', (typ_arrow (s' m) T2'). simpl. repeat split; eauto.
+    + rewrite HT. f_equal. rewrite <- Hs; eauto. destruct (lt_dec m m); eauto. omega.
     + inversion 1; subst; eauto.
-      destruct (typ_fv_subst _ _ _ H3) as [ ? [ ] ].
       edestruct Hsfv; eauto; subst; eauto with sets.
-  - destruct (IHt1 _ m _ _ _ H3) as [ n1 [ s1 [ s1' [ T1' [ Htyping1 [ ? [ HT1 [ Hsfv1 [ ? Hs1 ] ] ] ] ] ] ] ] ]; eauto with sets. rewrite Htyping1.
-    repeat rewrite env_subst_typ_ext with (s := s') (s' := fun x => typ_subst s1' (s1 x)) in * by eauto with sets.
+    + intros l ?. rewrite <- Hs by eauto. destruct (lt_dec l m); [ eauto | exfalso; eauto ].
+  - destruct (IHt1 _ m _ _ H3) as [ n1 [ s1 [ s1' [ T1' [ Htyping1 [ ? [ HT1 [ Hsfv1 [ ? Hs1 ] ] ] ] ] ] ] ] ]; eauto with sets. rewrite Htyping1.
+    repeat rewrite env_subst_typ_ext with (s := s) (s' := fun x => typ_subst s1' (s1 x)) in * by eauto with sets.
     repeat rewrite <- env_subst_typ_comp in *.
-    rewrite env_subst_typ_comp with (s := s1) in H5.
-    repeat rewrite trm_subst_typ_ext with (s := s') (s' := fun x => typ_subst s1' (s1 x)) in * by eauto with sets.
-    repeat rewrite <- trm_subst_typ_comp in *.
-    rewrite trm_subst_typ_comp with (s := s1) in H5.
-    destruct (IHt2 _ n1 _ _ _ H5) as [ n2 [ s2 [ s2' [ T2' [ Htyping2 [ ? [ HT2 [ Hsfv2 [ ? Hs2 ] ] ] ] ] ] ] ] ]; eauto with sets.
-    { intros ? HIn. rewrite <- env_subst_typ_comp in HIn. destruct (env_ftv_subst _ _ _ HIn) as [ ? [ HIn' ] ]. destruct (Hsfv1 _ _ HIn'); subst; eauto with sets. }
-    { intros ? HIn. rewrite <- trm_subst_typ_comp in HIn. destruct (trm_ftv_subst _ _ _ HIn) as [ ? [ HIn' ] ]. destruct (Hsfv1 _ _ HIn'); subst; eauto with sets. }
-    rewrite Htyping2. repeat rewrite <- env_subst_typ_comp in *. repeat rewrite <- trm_subst_typ_comp in *. subst.
+    destruct (IHt2 _ n1 _ _ H5) as [ n2 [ s2 [ s2' [ T2' [ Htyping2 [ ? [ HT2 [ Hsfv2 [ ? Hs2 ] ] ] ] ] ] ] ] ]; eauto with sets.
+    { intros ? HIn. destruct (env_ftv_subst _ _ _ HIn) as [ ? [ HIn' ] ]. destruct (Hsfv1 _ _ HIn'); subst; eauto with sets. }
+    rewrite Htyping2. subst.
     rewrite typ_subst_ext with (s := s1') (s' := fun x => typ_subst s2' (s2 x)) in * by eauto with sets. repeat rewrite <- typ_subst_comp in *.
     destruct unify_complete with
       (C := [(typ_subst s2 T1', typ_arrow T2' (typ_fvar n2))])
       (s := fun x => if lt_dec x n2 then s2' x else T) as [ s3 [ Hunify [ s3' Hmg ] ] ].
-    { constructor; eauto. simpl. destruct (lt_dec n2 n2); try omega. repeat rewrite <- typ_subst_comp.
+    { constructor; eauto. simpl. destruct (lt_dec n2 n2); try omega.
       repeat rewrite typ_subst_ext with (s := fun x => if lt_dec x n2 then s2' x else T) (s' := s2'); eauto.
       - intros x HIn. destruct (lt_dec x n2); eauto. specialize (H4 _ HIn). omega.
       - intros x HIn. destruct (lt_dec x n2); eauto. destruct (typ_fv_subst _ _ _ HIn) as [ ? [ HIns2 HInT1 ] ].
@@ -200,23 +194,20 @@ Proof.
 Qed.
 
 Definition typing' G t :
-  { s : _ & { T | typed (env_subst_typ s G) (trm_subst_typ s t) T /\
-    forall s' T', typed (env_subst_typ s' G) (trm_subst_typ s' t) T' ->
-      exists s'', typ_subst s'' T = T' /\ forall x, In _ (Union _ (env_ftv G) (trm_ftv t)) x -> s' x = typ_subst s'' (s x) } } +
-  { forall s T, typed (env_subst_typ s G) (trm_subst_typ s t) T -> False }.
+  { s : _ & { T | typed (env_subst_typ s G) t T /\
+    forall s' T', typed (env_subst_typ s' G) t T' ->
+      exists s'', typ_subst s'' T = T' /\ forall x, In _ (env_ftv G) x -> s' x = typ_subst s'' (s x) } } +
+  { forall s T, typed (env_subst_typ s G) t T -> False }.
 Proof.
-  assert (H : { x | forall y, In _ (Union _ (env_ftv G) (trm_ftv t)) y -> y < x }).
-  { Local Hint Resolve le_trans.
-    destruct (env_ftv_bound G) as [ x ].
-    destruct (trm_ftv_bound t) as [ y ].
-    destruct (le_ge_dec x y); [ exists (S y) | exists (S x) ]; inversion 1; subst; apply le_n_S; eauto. }
+  assert (H : { x | forall y, In nat (env_ftv G) y -> y < x }).
+  { destruct (env_ftv_bound G) as [ x ].
+    exists (S x). intros ? ?. apply le_n_S. eauto. }
   destruct H as [ x ].
-  destruct (typing x typ_fvar G t) as [ [ [ ? s ] T ] | ] eqn:Htyping;
-  [ left; exists s, T; split;
-    [ apply typing_sound in Htyping
-    | intros s' T' ?; destruct typing_complete with (m := x) (s := typ_fvar) (s' := s') (G := G) (t := t) (T := T') as [ ? [ ? [ s'' [ T'' [ Htyping' [ ? [ HT [ ? [ ? Hmg ] ] ] ] ] ] ] ] ] ]
-  | right; intros s T ?; destruct typing_complete with (m := x) (s := typ_fvar) (s' := s) (G := G) (t := t) (T := T) as [ ? [ ? [ ? [ ? [ Htyping' ] ] ] ] ] ];
-  intros; repeat (rewrite env_subst_typ_fvar in * || rewrite trm_subst_typ_fvar in *); eauto with sets.
-  - rewrite Htyping in Htyping'. inversion Htyping'. subst. eauto with sets.
-  - congruence.
+  destruct (typing x G t) as [ [ [ ? s ] T ] | ] eqn:Htyping.
+  - left. exists s, T. split.
+    + eapply typing_sound. eauto.
+    + intros s' T' Htyped. destruct (typing_complete _ _ x _ _ Htyped) as [ ? [ ? [ s'' [ T'' [ Htyping' [ ? [ HT [ ? [ ? Hmg ] ] ] ] ] ] ] ] ]; eauto.
+      rewrite Htyping in Htyping'. inversion Htyping'. subst. eauto.
+  - right. intros ? ? Htyped. destruct (typing_complete _ _ x _ _ Htyped) as [ ? [ ? [ s'' [ T'' [ Htyping' [ ? [ HT [ ? [ ? Hmg ] ] ] ] ] ] ] ] ]; eauto.
+    congruence.
 Defined.
