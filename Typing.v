@@ -1,5 +1,5 @@
-Require Import Arith List Recdef Finite_sets_facts Omega Program.
-Require Import Misc Types Term.
+Require Import Arith List Finite_sets_facts Omega Program.
+Require Import Types Term.
 
 Definition env := list typ.
 
