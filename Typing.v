@@ -59,7 +59,11 @@ Inductive typed : env -> trm -> typ -> Prop :=
   | typed_app G t1 t2 T1 T2 :
       typed G t1 (typ_arrow T1 T2) ->
       typed G t2 T1 ->
-      typed G (trm_app t1 t2) T2.
+      typed G (trm_app t1 t2) T2
+  | typed_let G t1 t2 T1 T2 :
+      typed G t1 T1 ->
+      typed (T1 :: G) t2 T2 ->
+      typed G (trm_let t1 t2) T2.
 Hint Constructors typed.
 
 Lemma typed_subst_typ s G t T :
@@ -92,13 +96,22 @@ Fixpoint typing n G t :=
                 (unify [ (typ_subst s2 T1, typ_arrow T2 (typ_fvar n2)) ])
           end
       end
+  | trm_let t1 t2 =>
+      match typing n G t1 with
+      | None => None
+      | Some (n1, s1, T1) =>
+          match typing n1 (T1 :: env_subst_typ s1 G) t2 with
+          | None => None
+          | Some (n2, s2, T2) => Some (n2, fun x => typ_subst s2 (s1 x), T2)
+          end
+      end
   end.
 
 Theorem typing_sound t : forall G m n s T,
   typing m G t = Some (n, s, T) ->
   typed (env_subst_typ s G) t T.
 Proof.
-  induction t as [ x | t | t1 IHt1 t2 IHt2 ]; simpl; intros G m ? s T Htyping.
+  induction t as [ x | t | t1 IHt1 t2 IHt2 | t1 IHt1 t2 IHt2 ]; simpl; intros G m ? s T Htyping.
   - destruct (nth_error G x) eqn:?; inversion Htyping; subst.
     rewrite env_subst_typ_fvar. eauto.
   - destruct (typing (S m) (typ_fvar m :: G) t) as [ [ [ ] T2 ] | ] eqn:Heqo; inversion Htyping; subst.
@@ -111,6 +124,10 @@ Proof.
     apply unify_sound in Heqo3. inversion Heqo3. subst. simpl in *.
     repeat rewrite <- env_subst_typ_comp in *.
     apply typed_subst_typ with (s := s2) in IHt1. apply typed_subst_typ with (s := s3) in IHt1. rewrite H6 in *. eauto.
+  - destruct (typing m G t1) as [ [ [ n1 s1 ] T1 ] | ] eqn:Heqo1; inversion Htyping.
+    specialize (IHt1 _ _ _ _ _ Heqo1).
+    destruct (typing n1 (T1 :: env_subst_typ s1 G) t2) as [ [ [ n2 s2 ] T2 ] | ] eqn:Heqo2; inversion Htyping. subst.
+    specialize (IHt2 _ _ _ _ _ Heqo2). simpl in *. rewrite <- env_subst_typ_comp. eauto.
 Qed.
 
 Theorem typing_complete t : forall G m s T,
@@ -122,7 +139,7 @@ Theorem typing_complete t : forall G m s T,
     /\ forall n, n < m -> s n = typ_subst s'' (s' n).
 Proof.
   Local Hint Resolve Nat.lt_le_trans le_trans le_S.
-  induction t as [ x | t | t1 IHt1 t2 IHt2 ]; intros G m s T; inversion 1; intros Henv; subst; simpl in *.
+  induction t as [ x | t | t1 IHt1 t2 IHt2 | t1 IHt1 t2 IHt2 ]; intros G m s T; inversion 1; intros Henv; subst; simpl in *.
   - unfold env_subst_typ in *.
     destruct (nth_error G x) as [ T' | ] eqn:Hnth.
     + exists m, typ_fvar, s, T'. repeat split; eauto.
@@ -143,10 +160,10 @@ Proof.
     + inversion 1; subst; eauto.
       edestruct Hsfv; eauto; subst; eauto with sets.
     + intros l ?. rewrite <- Hs by eauto. destruct (lt_dec l m); [ eauto | exfalso; eauto ].
-  - destruct (IHt1 _ m _ _ H3) as [ n1 [ s1 [ s1' [ T1' [ Htyping1 [ ? [ HT1 [ Hsfv1 [ ? Hs1 ] ] ] ] ] ] ] ] ]; eauto with sets. rewrite Htyping1.
+  - destruct (IHt1 _ m _ _ H3) as [ n1 [ s1 [ s1' [ T1' [ Htyping1 [ ? [ ? [ Hsfv1 [ HT1fv Hs1 ] ] ] ] ] ] ] ] ]; eauto with sets. rewrite Htyping1.
     repeat rewrite env_subst_typ_ext with (s := s) (s' := fun x => typ_subst s1' (s1 x)) in * by eauto with sets.
     repeat rewrite <- env_subst_typ_comp in *.
-    destruct (IHt2 _ n1 _ _ H5) as [ n2 [ s2 [ s2' [ T2' [ Htyping2 [ ? [ HT2 [ Hsfv2 [ ? Hs2 ] ] ] ] ] ] ] ] ]; eauto with sets.
+    destruct (IHt2 _ n1 _ _ H5) as [ n2 [ s2 [ s2' [ T2' [ Htyping2 [ ? [ ? [ Hsfv2 [ HT2fv Hs2 ] ] ] ] ] ] ] ] ]; eauto with sets.
     { intros ? HIn. destruct (env_ftv_subst _ _ _ HIn) as [ ? [ HIn' ] ]. destruct (Hsfv1 _ _ HIn'); subst; eauto with sets. }
     rewrite Htyping2. subst.
     rewrite typ_subst_ext with (s := s1') (s' := fun x => typ_subst s2' (s2 x)) in * by eauto with sets. repeat rewrite <- typ_subst_comp in *.
@@ -155,9 +172,9 @@ Proof.
       (s := fun x => if lt_dec x n2 then s2' x else T) as [ s3 [ Hunify [ s3' Hmg ] ] ].
     { constructor; eauto. simpl. destruct (lt_dec n2 n2); try omega.
       repeat rewrite typ_subst_ext with (s := fun x => if lt_dec x n2 then s2' x else T) (s' := s2'); eauto.
-      - intros x HIn. destruct (lt_dec x n2); eauto. specialize (H4 _ HIn). omega.
+      - intros x HIn. destruct (lt_dec x n2); eauto. specialize (HT2fv _ HIn). omega.
       - intros x HIn. destruct (lt_dec x n2); eauto. destruct (typ_fv_subst _ _ _ HIn) as [ ? [ HIns2 HInT1 ] ].
-        destruct (Hsfv2 _ _ HIns2); subst; try omega. specialize (H1 _ HInT1). omega. }
+        destruct (Hsfv2 _ _ HIns2); subst; try omega. specialize (HT1fv _ HInT1). omega. }
     rewrite Hunify. specialize (unifier_dom _ _ Hunify). intros Hsfv3. exists (S n2), (fun x => typ_subst (fun x => typ_subst s3 (s2 x)) (s1 x)), s3', (s3 n2). simpl in *. repeat split; eauto 3.
     + specialize (Hmg n2). destruct (lt_dec n2 n2); eauto; omega.
     + intros.
@@ -171,7 +188,7 @@ Proof.
         | H : In _ (Singleton _ _) _ |- _ => inversion H; clear H
         | H : In _ (Empty_set _) _ |- _ => inversion H
         end; subst; eauto.
-        destruct (typ_fv_subst _ _ _ H10) as [ ? [ ] ].
+        destruct (typ_fv_subst _ _ _ H9) as [ ? [ ] ].
         edestruct Hsfv2; eauto. subst. eauto.
     + intros ? HIn. destruct (Hsfv3 _ _ HIn); subst; eauto.
       repeat match goal with
@@ -179,7 +196,7 @@ Proof.
       | H : In _ (Singleton _ _) _ |- _ => inversion H; clear H
       | H : In _ (Empty_set _) _ |- _ => inversion H
       end; subst; eauto.
-      destruct (typ_fv_subst _ _ _ H7) as [ ? [ ] ].
+      destruct (typ_fv_subst _ _ _ H6) as [ ? [ ] ].
       edestruct Hsfv2; eauto. subst. eauto.
     + intros ? ?. rewrite Hs1 by eauto.
       rewrite typ_subst_ext with (s := s1') (s' := fun x => typ_subst s2' (s2 x))
@@ -188,6 +205,19 @@ Proof.
         by (intros x HIn; rewrite <- Hmg; destruct (lt_dec x n2); eauto; exfalso; destruct (typ_fv_subst _ _ _ HIn) as [ ? [ ] ];
             edestruct Hsfv2; eauto; subst; edestruct Hsfv1; eauto; subst; omega).
       repeat rewrite <- typ_subst_comp. eauto.
+  - destruct (IHt1 _ m _ _ H3) as [ n1 [ s1 [ s1' [ T1' [ Htyping1 [ ? [ ? [ Hsfv1 [ HT1fv Hs1 ] ] ] ] ] ] ] ] ]; eauto with sets. rewrite Htyping1.
+    repeat rewrite env_subst_typ_ext with (s := s) (s' := fun x => typ_subst s1' (s1 x)) in * by eauto with sets.
+    repeat rewrite <- env_subst_typ_comp in *. subst.
+    destruct (IHt2 (_ :: _) n1 _ _ H5) as [ n2 [ s2 [ s2' [ T2' [ Htyping2 [ ? [ HT2 [ Hsfv2 [ HT2fv Hs2 ] ] ] ] ] ] ] ] ]; eauto with sets.
+    {  simpl. inversion 1; eauto. destruct (env_ftv_subst _ _ _ H2) as [ ? [ HIn' ] ]. destruct (Hsfv1 _ _ HIn'); subst; eauto with sets. }
+    rewrite Htyping2. subst.
+    exists n2, (fun x => typ_subst s2 (s1 x)), s2', T2'. repeat split; eauto.
+    + intros ? ? HIn.
+      destruct (typ_fv_subst _ _ _ HIn) as [ ? [ ] ].
+      edestruct Hsfv2; eauto. subst.
+      edestruct Hsfv1; eauto.
+    + intros. rewrite Hs1 by eauto. rewrite typ_subst_comp. apply typ_subst_ext.
+      intros. apply Hs2. edestruct Hsfv1; eauto. subst. eauto.
 Qed.
 
 Definition typing' G t :

@@ -9,8 +9,10 @@ Lemma typed_rename G t T :
   typed G' (rename r t) T.
 Proof.
   induction 1; simpl; eauto.
-  intros ? ? Hren. constructor. apply IHtyped.
-  intros [ ]; eauto.
+  - intros. constructor. apply IHtyped.
+    intros [ ]; eauto.
+  - intros. econstructor; eauto. apply IHtyped2.
+    intros [ ]; eauto.
 Qed.
 
 Lemma typed_subst G t T :
@@ -20,9 +22,12 @@ Lemma typed_subst G t T :
   typed G' (t.[s]) T.
 Proof.
   induction 1; simpl; eauto.
-  intros ? ? Hs. constructor. apply IHtyped.
-  unfold up. intros [ ]; simpl; inversion 1; eauto.
-  apply typed_rename with (G := G'); eauto.
+  - intros. constructor. apply IHtyped.
+    unfold up. intros [ ]; simpl; inversion 1; eauto.
+    apply typed_rename with (G := G'); eauto.
+  - intros. econstructor; eauto. apply IHtyped2.
+    unfold up. intros [ ]; simpl; inversion 1; eauto.
+    apply typed_rename with (G := G'); eauto.
 Qed.
 
 Lemma subject_reduction t t' :
@@ -31,9 +36,11 @@ Lemma subject_reduction t t' :
   typed G t' T.
 Proof.
   induction 1; inversion 1; subst; eauto.
-  inversion H4. subst.
-  apply typed_subst with (G := T1 :: G); eauto.
-  intros []; simpl; inversion 1; subst; eauto.
+  - inversion H4. subst.
+    apply typed_subst with (G := T1 :: G); eauto.
+    intros [ ]; simpl; inversion 1; subst; eauto.
+  - apply typed_subst with (G := T1 :: G); eauto.
+    intros [ ]; simpl; inversion 1; subst; eauto.
 Qed.
 
 Lemma normal_arrow v T1 T2 :
@@ -52,6 +59,7 @@ Proof.
   - destruct IHtyped1 as [ | [ ] ]; eauto.
     edestruct normal_arrow; eauto. subst.
     destruct IHtyped2 as [ | [ ] ]; eauto.
+  - destruct IHtyped1 as [ | [ ] ]; eauto.
 Qed.
 
 Theorem type_safety t t' T :
