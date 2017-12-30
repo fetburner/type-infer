@@ -1,18 +1,15 @@
 Require Import Arith List Finite_sets_facts Omega Program.
-Require Import Types Term.
+Require Import Misc Types Term.
 
 Definition env := list typ.
 
 Definition env_ftv (G : env) :=
   fold_right (fun T s => Union _ (typ_fv T) s) (Empty_set _) G.
 
-Lemma env_ftv_bound G : { x | forall y, In _ (env_ftv G) y -> y <= x }.
+Lemma env_ftv_bound G : { x | forall y, In _ (env_ftv G) y -> y < x }.
 Proof.
-  Local Hint Resolve le_trans.
-  induction G as [ | T ? [ y ] ]; simpl.
-  - exists 0. inversion 1.
-  - destruct (typ_fv_bound T) as [ x ].
-    destruct (le_ge_dec x y); [ exists y | exists x ]; inversion 1; subst; eauto.
+  Local Hint Resolve Empty_bound Union_bound typ_fv_bound.
+  induction G; simpl; eauto.
 Defined.
 
 Lemma env_ftv_intro G T x :
@@ -25,7 +22,7 @@ Definition env_subst_typ s G := map (typ_subst s) G.
 
 Lemma env_subst_typ_fvar G : env_subst_typ typ_fvar G = G.
 Proof.
-  eapply eq_trans.
+  etransitivity.
   - apply map_ext. apply typ_subst_fvar.
   - apply map_id.
 Qed.
@@ -40,7 +37,7 @@ Qed.
 
 Lemma env_subst_typ_comp s s' G : env_subst_typ s (env_subst_typ s' G) = env_subst_typ (fun x => typ_subst s (s' x)) G.
 Proof.
-  eapply eq_trans.
+  etransitivity.
   - apply map_map.
   - apply map_ext. apply typ_subst_comp.
 Qed.
@@ -199,10 +196,7 @@ Definition typing' G t :
       exists s'', typ_subst s'' T = T' /\ forall x, In _ (env_ftv G) x -> s' x = typ_subst s'' (s x) } } +
   { forall s T, typed (env_subst_typ s G) t T -> False }.
 Proof.
-  assert (H : { x | forall y, In nat (env_ftv G) y -> y < x }).
-  { destruct (env_ftv_bound G) as [ x ].
-    exists (S x). intros ? ?. apply le_n_S. eauto. }
-  destruct H as [ x ].
+  destruct (env_ftv_bound G) as [ x ].
   destruct (typing x G t) as [ [ [ ? s ] T ] | ] eqn:Htyping.
   - left. exists s, T. split.
     + eapply typing_sound. eauto.

@@ -36,12 +36,10 @@ Proof.
   induction T; simpl; eauto.
 Qed.
 
-Lemma typ_fv_bound T : { x | forall y, In _ (typ_fv T) y -> y <= x }.
+Lemma typ_fv_bound T : { x | forall y, In _ (typ_fv T) y -> y < x }.
 Proof.
-  Local Hint Resolve le_trans.
-  induction T as [ x | ? [ x ] ? [ y ] ]; simpl.
-  - exists x. inversion 1. eauto.
-  - destruct (le_ge_dec x y); [ exists y | exists x ]; inversion 1; subst; eauto.
+  Local Hint Resolve Singleton_bound Union_bound.
+  induction T; simpl; eauto.
 Defined.
 
 Fixpoint typ_subst s T :=
