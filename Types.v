@@ -3,12 +3,14 @@ Require Import Misc.
 
 Inductive typ : Set :=
   | typ_fvar (x : nat)
+  | typ_bvar (n : nat)
   | typ_arrow (T1 T2 : typ).
 
 Definition typ_eq_dec T1 : forall T2 : typ, { T1 = T2 } + { T1 <> T2 }.
 Proof.
-  induction T1 as [ x | ? IHT11 ? IHT12 ]; intros [ y | T21 T22 ]; try solve [ right; inversion 1 ].
-  - destruct (eq_nat_dec x y); [ left | right ]; congruence.
+  induction T1 as [ x | m | ? IHT11 ? IHT12 ]; intros [ y | n | T21 T22 ]; try solve [ right; inversion 1 ].
+  - destruct (Nat.eq_dec x y); [ left | right ]; congruence.
+  - destruct (Nat.eq_dec m n); [ left | right ]; congruence.
   - destruct (IHT11 T21); [ | right; congruence ].
     destruct (IHT12 T22); [ | right; congruence ].
     left. congruence.
@@ -17,6 +19,7 @@ Defined.
 Fixpoint typ_fv T :=
   match T with
   | typ_fvar x => Singleton _ x
+  | typ_bvar _ => Empty_set _
   | typ_arrow T1 T2 => Union _ (typ_fv T1) (typ_fv T2)
   end.
 
@@ -24,7 +27,7 @@ Definition typ_fv_dec x T :
   { In _ (typ_fv T) x } + { ~ In _ (typ_fv T) x }.
 Proof.
   Local Hint Resolve In_Empty_dec In_Union_dec.
-  induction T as [ y | ]; simpl; eauto.
+  induction T as [ y | | ]; simpl; eauto.
   destruct (eq_nat_dec x y).
   - eauto with sets.
   - right. inversion 1. eauto with sets.
@@ -38,13 +41,14 @@ Qed.
 
 Lemma typ_fv_bound T : { x | forall y, In _ (typ_fv T) y -> y < x }.
 Proof.
-  Local Hint Resolve Singleton_bound Union_bound.
+  Local Hint Resolve Empty_bound Singleton_bound Union_bound.
   induction T; simpl; eauto.
 Defined.
 
 Fixpoint typ_subst s T :=
   match T with
   | typ_fvar x => s x
+  | typ_bvar n => typ_bvar n
   | typ_arrow T1 T2 => typ_arrow (typ_subst s T1) (typ_subst s T2)
   end.
 
@@ -56,18 +60,20 @@ Lemma typ_subst_ext s s' T :
   typ_subst s T = typ_subst s' T.
 Proof. induction T; simpl; intros; solve [ eauto with sets | f_equal; eauto with sets ]. Qed.
 
-Lemma typ_subst_comp s s' T : typ_subst s' (typ_subst s T) = typ_subst (fun x => typ_subst s' (s x)) T.
+Lemma typ_subst_comp s s' T : typ_subst s (typ_subst s' T) = typ_subst (fun x => typ_subst s (s' x)) T.
 Proof. induction T; simpl; solve [ eauto with sets | f_equal; eauto with sets ]. Qed.
 
 Lemma typ_fv_subst s T x : In _ (typ_fv (typ_subst s T)) x -> exists y, In _ (typ_fv (s y)) x /\ In _ (typ_fv T) y.
 Proof.
   induction T; simpl; eauto with sets.
+  - inversion 1.
   - inversion 1; [ destruct IHT1 as [ ? [ ] ] | destruct IHT2 as [ ? [ ] ] ]; eauto with sets.
 Qed.
 
 Fixpoint typ_size T :=
   S match T with
     | typ_fvar _ => 0
+    | typ_bvar _ => 0
     | typ_arrow T1 T2 => typ_size T1 + typ_size T2
     end.
 
@@ -217,10 +223,12 @@ Function unify C { wf constr_lt C } :=
             if typ_fv_dec y T1 then None
             else option_map (fun s z => typ_subst s (typ_subst_single y T1 z)) (unify (constr_subst (typ_subst_single y T1) C))
         | typ_arrow T11 T12, typ_arrow T21 T22 => unify ((T11, T21) :: (T12, T22) :: C)
+        | _, _ => None
         end
   end.
 Proof.
   - intros. subst. eauto.
+  - intros. eauto.
   - intros. eauto.
   - intros. eauto.
   - intros. eauto.
@@ -261,10 +269,11 @@ Proof.
   - intros ? Hunify. rewrite unify_equation in Hunify.
     destruct (typ_eq_dec T1 T2); subst; eauto.
     destruct T1;
-      [ eapply unify_sound_subst; eauto | ];
-      ( destruct T2; [ eapply unify_sound_subst; eauto | ] ).
+      [ eapply unify_sound_subst; eauto | | ];
+      ( destruct T2; [ eapply unify_sound_subst; eauto | | ] );
+      inversion Hunify.
     specialize (IHC _ (constr_lt_arrow _ _ _ _ _) _ Hunify).
-    inversion IHC. inversion H2. subst. simpl in *.
+    inversion IHC. inversion H3. subst. simpl in *.
     constructor; eauto. simpl. congruence.
 Qed.
 
@@ -351,8 +360,8 @@ Proof.
     eauto.
   - inversion Hunifies; subst; simpl in *.
     destruct (typ_eq_dec T1 T2); subst; eauto.
-    destruct T1; [ eapply unify_complete_var; eauto | ];
-      (destruct T2; [ eapply unify_complete_var; eauto | ]);
+    destruct T1; [ eapply unify_complete_var; eauto | | ];
+      (destruct T2; [ eapply unify_complete_var; eauto | | ]);
       simpl in *; inversion H1; try congruence.
     edestruct IHC as [ ? [ Heq ] ].
     + apply constr_lt_arrow.
@@ -394,9 +403,9 @@ Proof.
   - inversion Hunify. subst. inversion HIn. eauto.
   - destruct (typ_eq_dec T1 T2).
     + subst. edestruct IHC; eauto with sets.
-    + destruct T1; [ eapply unifier_dom_var; eauto | ];
-        (destruct T2; [ eapply unifier_dom_var; eauto | ]);
-        try inversion Hunify.
+    + destruct T1; [ eapply unifier_dom_var; eauto | | ];
+        (destruct T2; [ eapply unifier_dom_var; eauto | | ]);
+        inversion Hunify.
     simpl. edestruct IHC; eauto.
     right. apply Included_constr_arrow. eauto.
 Qed.
