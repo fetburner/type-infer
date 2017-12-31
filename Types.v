@@ -70,6 +70,38 @@ Proof.
   - inversion 1; [ destruct IHT1 as [ ? [ ] ] | destruct IHT2 as [ ? [ ] ] ]; eauto with sets.
 Qed.
 
+Fixpoint typ_bv T :=
+  match T with
+  | typ_fvar _ => Empty_set _
+  | typ_bvar n => Singleton _ n
+  | typ_arrow T1 T2 => Union _ (typ_bv T1) (typ_bv T2)
+  end.
+
+Fixpoint typ_open s T :=
+  match T with
+  | typ_fvar x => typ_fvar x
+  | typ_bvar n => s n
+  | typ_arrow T1 T2 => typ_arrow (typ_open s T1) (typ_open s T2)
+  end.
+
+Lemma typ_open_bvar T : typ_open typ_bvar T = T.
+Proof. induction T; simpl; congruence. Qed.
+
+Lemma typ_open_ext s s' T :
+  (forall x, In _ (typ_bv T) x -> s x = s' x) ->
+  typ_open s T = typ_open s' T.
+Proof. induction T; simpl; intros; solve [ eauto with sets | f_equal; eauto with sets ]. Qed.
+
+Lemma typ_open_comp s s' T : typ_open s (typ_open s' T) = typ_open (fun x => typ_open s (s' x)) T.
+Proof. induction T; simpl; solve [ eauto with sets | f_equal; eauto with sets ]. Qed.
+
+Lemma typ_bv_open s T x : In _ (typ_bv (typ_open s T)) x -> exists y, In _ (typ_bv (s y)) x /\ In _ (typ_bv T) y.
+Proof.
+  induction T; simpl; eauto with sets.
+  - inversion 1.
+  - inversion 1; [ destruct IHT1 as [ ? [ ] ] | destruct IHT2 as [ ? [ ] ] ]; eauto with sets.
+Qed.
+
 Fixpoint typ_size T :=
   S match T with
     | typ_fvar _ => 0
