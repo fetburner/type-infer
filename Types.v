@@ -102,6 +102,92 @@ Proof.
   - inversion 1; [ destruct IHT1 as [ ? [ ] ] | destruct IHT2 as [ ? [ ] ] ]; eauto with sets.
 Qed.
 
+Lemma typ_bv_subst_introT s T x :
+  In _ (typ_bv T) x ->
+  In _ (typ_bv (typ_subst s T)) x.
+Proof. induction T; simpl; inversion 1; eauto with sets. Qed.
+
+Lemma typ_bv_subst_intros s T x y :
+  In _ (typ_bv (s x)) y ->
+  In _ (typ_fv T) x ->
+  In _ (typ_bv (typ_subst s T)) y.
+Proof. induction T; simpl; inversion 2; eauto with sets. Qed.
+
+Lemma typ_bv_subst s T x :
+  In _ (typ_bv (typ_subst s T)) x ->
+  In _ (typ_bv T) x \/ exists y, In _ (typ_fv T) y /\ In _ (typ_bv (s y)) x.
+Proof.
+  induction T; simpl; eauto with sets.
+  inversion 1; [ destruct IHT1 as [ | [ ? [ ] ] ] | destruct IHT2 as [ | [ ? [ ] ] ] ]; eauto with sets.
+Qed.
+
+Lemma typ_fv_open_introT s T x :
+  In _ (typ_fv T) x ->
+  In _ (typ_fv (typ_open s T)) x.
+Proof. induction T; simpl; inversion 1; eauto with sets. Qed.
+
+Lemma typ_fv_open_intros s T x y :
+  In _ (typ_fv (s x)) y ->
+  In _ (typ_bv T) x ->
+  In _ (typ_fv (typ_open s T)) y.
+Proof. induction T; simpl; inversion 2; eauto with sets. Qed.
+
+Lemma typ_fv_open s T x :
+  In _ (typ_fv (typ_open s T)) x ->
+  In _ (typ_fv T) x \/ exists y, In _ (typ_bv T) y /\ In _ (typ_fv (s y)) x.
+Proof.
+  induction T; simpl; eauto with sets.
+  inversion 1; [ destruct IHT1 as [ | [ ? [ ] ] ] | destruct IHT2 as [ | [ ? [ ] ] ] ]; eauto with sets.
+Qed.
+
+(* Locally closed types *)
+Definition type T :=
+  forall x, In _ (typ_bv T) x -> False.
+
+Corollary type_subst s T :
+  type T ->
+  (forall x, In _ (typ_fv T) x -> type (s x)) ->
+  type (typ_subst s T).
+Proof.
+  unfold type. intros ? ? ? HIn.
+  destruct (typ_bv_subst _ _ _ HIn) as [ | [ ? [ ] ] ]; eauto.
+Qed.
+
+Corollary type_open s T :
+  (forall x, In _ (typ_bv T) x -> type (s x)) ->
+  type (typ_open s T).
+Proof.
+  unfold type. intros ? ? HIn.
+  destruct (typ_bv_open _ _ _ HIn) as [ ? [ ] ]. eauto.
+Qed.
+
+Lemma type_arrow T1 T2 : type T1 -> type T2 -> type (typ_arrow T1 T2).
+Proof. intros H1 H2. inversion 1; [ eapply H1 | eapply H2 ]; eauto. Qed.
+
+Lemma type_arrow_invl T1 T2 : type (typ_arrow T1 T2) -> type T1.
+Proof. intros H ? ?. eapply H. simpl. eauto with sets. Qed.
+
+Lemma type_arrow_invr T1 T2 : type (typ_arrow T1 T2) -> type T2.
+Proof. intros H ? ?. eapply H. simpl. eauto with sets. Qed.
+
+Lemma typ_subst_open s s' T :
+  (forall x y, In _ (typ_fv T) x -> In _ (typ_bv (s x)) y -> s' y = typ_bvar y) ->
+  typ_subst s (typ_open s' T) = typ_open (fun x => typ_subst s (s' x)) (typ_subst s T).
+Proof.
+  intros Hs. induction T; simpl in *; f_equal; eauto 6 with sets.
+  rewrite typ_open_ext with (s' := typ_bvar) by (intros; erewrite Hs by eauto with sets; reflexivity).
+  rewrite typ_open_bvar. eauto.
+Qed.
+
+Lemma typ_open_subst s s' T :
+  (forall x y, In _ (typ_bv T) x -> In _ (typ_fv (s x)) y -> s' y = typ_fvar y) ->
+  typ_open s (typ_subst s' T) = typ_subst (fun x => typ_open s (s' x)) (typ_open s T).
+Proof.
+  intros Hs. induction T; simpl in *; f_equal; eauto 6 with sets.
+  rewrite typ_subst_ext with (s' := typ_fvar) by (intros; erewrite Hs by eauto with sets; reflexivity).
+  rewrite typ_subst_fvar. eauto.
+Qed.
+
 Fixpoint typ_size T :=
   S match T with
     | typ_fvar _ => 0
