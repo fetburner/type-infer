@@ -18,14 +18,14 @@ Inductive cbv : trm -> trm -> Prop :=
   | cbv_appabs t11 v2 :
       value v2 ->
       cbv (trm_app (trm_abs t11) v2) t11.[v2/]
-  | cbv_appl t1 t1' t2 :
+  | cbv_appL t1 t1' t2 :
       cbv t1 t1' ->
       cbv (trm_app t1 t2) (trm_app t1' t2)
-  | cbv_appr v1 t2 t2' :
+  | cbv_appR v1 t2 t2' :
       value v1 ->
       cbv t2 t2' ->
       cbv (trm_app v1 t2) (trm_app v1 t2')
-  | cbv_letl t1 t1' t2 :
+  | cbv_letL t1 t1' t2 :
       cbv t1 t1' ->
       cbv (trm_let t1 t2) (trm_let t1' t2)
   | cbv_let v1 t2 :
