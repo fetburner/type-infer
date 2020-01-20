@@ -68,6 +68,14 @@ Proof.
     apply /Hext; by rewrite mem_cat Hfv ?orbT.
 Qed.
 
+Corollary typ_subst_fvar_eq s T :
+  { in typ_fv T, s =1 typ_fvar } ->
+  typ_subst s T = T.
+Proof.
+  move => /typ_subst_ext ->.
+  by rewrite typ_subst_fvar.
+Qed.
+
 Lemma typ_subst_comp s s' T :
   typ_subst s (typ_subst s' T) = typ_subst (typ_subst s \o s') T.
 Proof. by induction T => /=; congruence. Qed.
@@ -83,6 +91,41 @@ Proof.
     exists y; by rewrite Hs mem_cat Hfv ?orbT.
 Qed.
 
+Lemma typ_fv_subst_intro s T x y :
+  y \in typ_fv T ->
+  x \in typ_fv (s y) ->
+  x \in typ_fv (typ_subst s T).
+Proof.
+  induction T => //=.
+  - by rewrite mem_seq1 => /eqP ->.
+  - rewrite !mem_cat => /orP [ ] Hin => [ /(IHT1 Hin) | /(IHT2 Hin) ] -> //.
+    by rewrite orbT.
+Qed.
+
+Lemma typ_bv_subst s T x :
+  x \in typ_bv (typ_subst s T) ->
+  x \in typ_bv T \/ exists y, x \in typ_bv (s y) /\ y \in typ_fv T.
+Proof.
+  induction T => /= [ Hin | | ]; eauto.
+  - right. exists x0. rewrite mem_seq1 eqxx. eauto.
+  - rewrite !mem_cat => /orP [ /IHT1 | /IHT2 ] [ -> | [ y [ Hs Hfv ] ] ]; rewrite ?orbT; eauto;
+    right; exists y; by rewrite Hs mem_cat Hfv ?orbT.
+Qed.
+
+Lemma typ_bv_subst_intro_sub s T x y :
+  y \in typ_fv T ->
+  x \in typ_bv (s y) ->
+  x \in typ_bv (typ_subst s T).
+Proof.
+  induction T => //=.
+  - by rewrite mem_seq1 => /eqP ->.
+  - rewrite !mem_cat => /orP [ ] Hin => [ /(IHT1 Hin) | /(IHT2 Hin) ] -> //.
+    by rewrite orbT.
+Qed.
+
+Lemma typ_open_bvar T : typ_open typ_bvar T = T.
+Proof. induction T => /=; congruence. Qed.
+
 Lemma typ_open_ext s s' T :
   { in typ_bv T, s =1 s' } ->
   typ_open s T = typ_open s' T.
@@ -91,6 +134,14 @@ Proof.
   - apply. by rewrite mem_seq1 eqxx.
   - congr (typ_arrow _ _); [ apply /IHT1 | apply /IHT2 ] => ? Hin;
     apply /Hext; by rewrite mem_cat Hin ?orbT.
+Qed.
+
+Corollary typ_open_bvar_eq s T :
+  { in typ_bv T, s =1 typ_bvar } ->
+  typ_open s T = T.
+Proof.
+  move => /typ_open_ext ->.
+  by rewrite typ_open_bvar.
 Qed.
 
 Lemma typ_open_comp s s' T : typ_open s (typ_open s' T) = typ_open (typ_open s \o s') T.
@@ -107,11 +158,43 @@ Proof.
     exists y; by rewrite Hs mem_cat Hfv ?orbT.
 Qed.
 
+Lemma typ_fv_open s T x :
+  x \in typ_fv (typ_open s T) ->
+  x \in typ_fv T \/ exists y, x \in typ_fv (s y) /\ y \in typ_bv T.
+Proof.
+  induction T => /= [ Hin | | ]; eauto.
+  - right. exists n. rewrite mem_seq1 eqxx. eauto.
+  - rewrite !mem_cat => /orP [ /IHT1 | /IHT2 ] [ -> | [ y [ Hs Hfv ] ] ]; rewrite ?orbT; eauto;
+    right; exists y; by rewrite Hs mem_cat Hfv ?orbT.
+Qed.
+
+Lemma typ_subst_open_distr s s' T :
+  (forall x, x \in typ_fv T -> forall y, y \in typ_bv (s x) -> s' y = typ_bvar y) ->
+  typ_subst s (typ_open s' T) = typ_open (typ_subst s \o s') (typ_subst s T).
+Proof.
+  induction T => //= Hclose.
+  - rewrite typ_open_bvar_eq => //= ? ?.
+    by rewrite (Hclose x) // mem_seq1 eqxx.
+  - congr (typ_arrow _ _ ); [ rewrite IHT1 | rewrite IHT2 ] => // ? Hin ?;
+    apply /Hclose; by rewrite mem_cat Hin ?orbT.
+Qed.
+
+Lemma typ_open_subst_distr s s' T :
+  (forall x, x \in typ_bv T -> forall y, y \in typ_fv (s x) -> s' y = typ_fvar y) ->
+  typ_open s (typ_subst s' T) = typ_subst (typ_open s \o s') (typ_open s T).
+Proof.
+  induction T => //= Hfresh.
+  - rewrite typ_subst_fvar_eq => //= ? ?.
+    by rewrite (Hfresh n) //= mem_seq1 eqxx.
+  - congr (typ_arrow _ _ ); [ rewrite IHT1 | rewrite IHT2 ] => // ? Hin ?;
+    apply /Hfresh; by rewrite mem_cat Hin ?orbT.
+Qed.
+
 
 Lemma typ_subst_single_notin S T x (Hnotin : x \notin typ_fv T) :
   typ_subst [eta typ_fvar with x |-> S] T = T.
 Proof.
-  rewrite (typ_subst_ext _ typ_fvar) ?typ_subst_fvar => // y /= Hin.
+  rewrite typ_subst_fvar_eq => // y /= Hin.
   by move: (@eqP _ y x) Hin Hnotin => [ -> -> | ].
 Qed.
 
@@ -162,6 +245,20 @@ Proof.
     by rewrite -IH.
 Qed.
 
+Fixpoint typ_occur x T :=
+  match T with
+  | typ_fvar y => x == y
+  | typ_bvar _ => false
+  | typ_arrow T1 T2 => (typ_occur x T1) || (typ_occur x T2)
+  end.
+
+Lemma typ_occur_fv x : forall T, typ_occur x T = (x \in typ_fv T).
+Proof.
+  elim => //= [ ? | ? -> ? -> ].
+  - by rewrite mem_seq1.
+  - by rewrite mem_cat.
+Qed.
+
 Section UnifyInner.
   Variable unify : typ -> typ -> seq (nat * typ) -> option (seq (nat * typ)).
 
@@ -180,7 +277,7 @@ Section UnifyInner.
   Definition flex_rigid x T2 s :=
     match s with
     | [::] =>
-        if x \in typ_fv T2 then None
+        if typ_occur x T2 then None
         else Some [:: (x, T2)]
     | (z, T) :: s =>
         omap (cons (z, T))
@@ -202,7 +299,7 @@ Section UnifyInner.
     | typ_arrow _ _, typ_bvar _ => None
     end.
 
-  Hypothesis unify_sound : 
+  Hypothesis unify_sound :
     forall T1 T2 s s',
     unify T1 T2 s = Some s' ->
     exists s'', s' = s ++ s'' /\
@@ -214,7 +311,8 @@ Section UnifyInner.
     typ_subst_seq (typ_fvar x) s' = typ_subst_seq T2 s'.
   Proof.
     move => [ | [ z T ] s ] /=.
-    - destruct (x \in typ_fv T2) eqn:Hin; rewrite Hin; inversion 1 => /=.
+    - rewrite typ_occur_fv.
+      destruct (x \in typ_fv T2) eqn:Hin; inversion 1 => /=.
       rewrite eqxx typ_subst_single_notin ?Hin; eauto.
     - destruct
         (unify (if x == z then T else typ_fvar x)
@@ -229,7 +327,7 @@ Section UnifyInner.
     typ_subst_seq (typ_fvar x) s' = typ_subst_seq (typ_fvar y) s'.
   Proof.
     move: (flex_rigid_sound x (typ_fvar y) s' s).
-    rewrite /flex_flex /flex_rigid /= mem_seq1.
+    rewrite /flex_flex /flex_rigid /=.
     case (@eqP _ x y); eauto.
     inversion 3. subst.
     exists [::]. by rewrite cats0.
@@ -291,7 +389,8 @@ Section UnifyInner.
   Proof.
     move => [ | [ z T ] s ] /= s' Huniq =>
       [ ? | [ /andP [ Hz Hoccur ] [ HT Hvalid ] ] ] Hx HT2 Hunifies => [ | ? ].
-    - destruct (x \in typ_fv T2) eqn:Hoccur; rewrite Hoccur.
+    - rewrite typ_occur_fv.
+      destruct (x \in typ_fv T2) eqn:Hoccur.
       { by rewrite (unifies_occur _ _ _ Hunifies Hoccur) eq_refl. }
       exists [:: (x, T2)] => /=. rewrite Hx Hoccur. repeat split; eauto.
       exists s' => ?.
@@ -334,14 +433,13 @@ Section UnifyInner.
   Proof.
     move => ? ? ? Hy ?.
     move: (flex_rigid_complete x (typ_fvar y) s s').
-    rewrite /flex_rigid /flex_flex /= mem_seq1.
+    rewrite /flex_rigid /flex_flex /=.
     case (@eqP _ x y) => ?; subst.
     - exists [::]. rewrite cats0. eauto.
     - apply => // [ ? | ].
       + rewrite mem_seq1 => /eqP ?. by subst.
       + apply /eqP. congruence.
   Qed.
-                
 
   Theorem unify_inner_complete :
     forall T1 T2 s s',
@@ -385,6 +483,66 @@ Section UnifyInner.
       (repeat eexists; eauto) => ?.
       by rewrite Hgen Hgen' typ_subst_seq_cat.
   Qed.
+
+  Fixpoint bound_subst_seq (s : seq (nat * typ)) : Prop :=
+    if s is (x, T) :: s
+    then {subset typ_bv T <= L} /\ bound_subst_seq s
+    else True.
+
+  Hypothesis unify_bound :
+    forall T1 T2 s s',
+    bound_subst_seq s ->
+    {subset typ_bv T1 <= L} ->
+    {subset typ_bv T2 <= L} ->
+    unify T1 T2 s = Some s' ->
+    bound_subst_seq s'.
+
+  Lemma flex_rigid_bound x T2 s' : forall s,
+    bound_subst_seq s ->
+    {subset typ_bv T2 <= L} ->
+    flex_rigid x T2 s = Some s' ->
+    bound_subst_seq s'.
+  Proof.
+    move => [ ? ? /= | [ z T ] s /= [ HT ? ] HT2 ].
+    - by case (typ_occur x T2); inversion 1.
+    - destruct (unify (if x == z then T else typ_fvar x) (typ_subst [eta typ_fvar with z |-> T] T2)) eqn:Hunify; inversion 1.
+      split; eauto.
+      refine (unify_bound _ _ _ _ _ _ _ Hunify) => // ? => [ | /typ_bv_subst [ /HT2 // | [ y [ /= ] ] ] ].
+      + by case (x == z) => // /HT.
+      + by case (y == z) => // /HT.
+  Qed.
+
+  Lemma flex_flex_bound x y s s' :
+    bound_subst_seq s ->
+    flex_flex x y s = Some s' ->
+    bound_subst_seq s'.
+  Proof.
+    move: (flex_rigid_bound x (typ_fvar y) s' s).
+    rewrite /flex_rigid /flex_flex /=.
+    case (x == y) => [ | Hflex_rigid ? ].
+    - inversion 3. subst. eauto.
+    - exact /Hflex_rigid.
+  Qed.
+
+  Lemma unify_inner_bound : forall T1 T2 s s',
+    bound_subst_seq s ->
+    {subset typ_bv T1 <= L} ->
+    {subset typ_bv T2 <= L} ->
+    unify_inner T1 T2 s = Some s' ->
+    bound_subst_seq s'.
+  Proof.
+    elim =>
+      [ ? [ ? ? ? ? ? ? /flex_flex_bound | ? ? ? ? ? ? /flex_rigid_bound | ? ? ? ? ? ? ? /flex_rigid_bound ]
+      | x [ ? ? ? ? ? ? /flex_rigid_bound | y ? ? ? ? ? | ]
+      | T11 IHT11 T12 IHT12 [ ? ? ? ? ? ? /flex_rigid_bound | | T21 T22 s ? ? HT1 HT2 ] ] //=; eauto.
+    - by case (x == y); inversion 1; subst.
+    - destruct (unify_inner T12 T22 s) eqn:Hunify => //=.
+      apply /IHT11 => [ | ? Hin | ? Hin ].
+      + refine (IHT12 _ _ _ _ _ _ Hunify) => // ? Hin;
+        [ apply /HT1 | apply /HT2 ]; by rewrite /= mem_cat Hin orbT.
+      + apply /HT1. by rewrite /= mem_cat Hin.
+      + apply /HT2. by rewrite /= mem_cat Hin.
+  Qed.
 End UnifyInner.
 
 Fixpoint unify_outer n T1 T2 s :=
@@ -401,7 +559,7 @@ Proof.
   case (@eqP _ T1 T2) => // ->. inversion 1. exists [::]. rewrite cats0. eauto.
 Qed.
 
-Lemma unify_outer_complete : 
+Lemma unify_outer_complete :
   forall L n s s' T1 T2,
   size L <= n ->
   uniq L ->
@@ -421,14 +579,26 @@ Proof.
   - rewrite (_ : T1 == T2).
     { exists [::]. rewrite cats0 /=. eauto. }
     move: leqn0 Hleq Hunifies => -> /eqP /size0nil ?. subst.
-    by rewrite !typ_subst_seq_typ_subst !typ_subst_comp
-      -!(typ_subst_ext typ_fvar) ?typ_subst_fvar => [ -> | ? /HT2 | ? /HT1 ].
+    by rewrite !typ_subst_seq_typ_subst !typ_subst_comp !typ_subst_fvar_eq => [ -> | ? /HT2 | ? /HT1 ].
   - rewrite -(prednK Hpos) /=.
     apply /unify_inner_complete => // ? Hlt ? ? ? ?.
     apply /IH.
     + exact /ltP.
     + rewrite -ltnS (prednK Hpos).
       exact: (leq_trans Hlt).
+Qed.
+
+Lemma unify_outer_bound L :
+  forall n T1 T2 s s',
+  bound_subst_seq L s ->
+  {subset typ_bv T1 <= L} ->
+  {subset typ_bv T2 <= L} ->
+  unify_outer n T1 T2 s = Some s' ->
+  bound_subst_seq L s'.
+Proof.
+  elim => /= [ T1 T2 ? ?  | ? IH ].
+  - by case (T1 == T2); inversion 4; subst.
+  - exact /unify_inner_bound.
 Qed.
 
 Definition unify T1 T2 :=
@@ -446,7 +616,7 @@ Proof.
   - rewrite (rem_filter _ Huniq) mem_filter => /= /andP [ ? -> ].
     by rewrite orbT.
 Qed.
-  
+
 Theorem unify_sound T1 T2 s :
   unify T1 T2 = Some s ->
   typ_subst s T1 = typ_subst s T2.
@@ -475,4 +645,21 @@ Proof.
     + by rewrite Hgen typ_subst_seq_typ_subst.
     + rewrite mem_seq1 => /eqP; eauto.
     + rewrite mem_undup mem_cat => /orP [ -> | -> ]; eauto.
+Qed.
+
+Theorem unify_bound T1 T2 s :
+  unify T1 T2 = Some s ->
+  forall x y, y \in typ_bv (s x) -> y \in typ_bv T1 \/ y \in typ_bv T2.
+Proof.
+  rewrite /unify.
+  have H : forall s L, bound_subst_seq L s -> forall x T, { subset typ_bv T <= L } -> x \in typ_bv (typ_subst_seq T s) -> x \in L.
+  { elim => [ ? ? ? ? | [ y ? ] ? IH ? /= [ HT0 ? ] ? ? HT  ].
+    - apply.
+    - apply /IH => // ? /typ_bv_subst [ /HT | [ x [ ] ] ] //=.
+      by case (x == y) => // /HT0. }
+  destruct (unify_outer (size (typ_fv T1) + size (typ_fv T2)) T1 T2 [::]) eqn:Hunify; inversion 1 => ? x Hbv.
+  apply /orP. rewrite -mem_cat.
+  apply: H Hbv => //.
+apply: unify_outer_bound Hunify => // ?; rewrite mem_cat => -> //.
+  by rewrite orbT.
 Qed.

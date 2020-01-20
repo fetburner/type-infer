@@ -1,4 +1,3 @@
-Require Import Types.
 Require Import Autosubst.Autosubst.
 
 Inductive trm :=
