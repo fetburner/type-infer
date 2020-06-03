@@ -3,25 +3,29 @@ Require Import Types Term.
 
 Definition env := list typ.
 
-Definition env_fv := foldr (cat \o typ_fv) [::].
-Definition env_bv := foldr (cat \o typ_bv) [::].
+Definition env_fv := foldr (predU \o typ_fv) pred0.
+Definition env_bv := foldr (predU \o typ_bv) pred0.
 
-Lemma env_fv_intro T x (_ : x \in typ_fv T) :
+Lemma env_fv_intro T x :
+  x \in typ_fv T ->
   forall G, T \in G -> x \in env_fv G.
 Proof.
+  rewrite -topredE => /= H.
   elim => //= ? ? IH.
-  rewrite in_cons mem_cat => /orP [ /eqP <- | /IH -> ].
-  - by rewrite H.
-  - by rewrite orbT.
+  rewrite inE => /orP [ /eqP <- | /IH ].
+  - by rewrite inE H.
+  - rewrite -!topredE => /= ->. by rewrite orbT.
 Qed.
 
-Lemma env_bv_intro T x (_ : x \in typ_bv T) :
+Lemma env_bv_intro T x :
+  x \in typ_bv T ->
   forall G, T \in G -> x \in env_bv G.
 Proof.
+  rewrite -topredE => /= H.
   elim => //= ? ? IH.
-  rewrite in_cons mem_cat => /orP [ /eqP <- | /IH -> ].
-  - by rewrite H.
-  - by rewrite orbT.
+  rewrite inE => /orP [ /eqP <- | /IH ].
+  - by rewrite inE H.
+  - rewrite -!topredE => /= ->. by rewrite orbT.
 Qed.
 
 Definition env_subst s := map (typ_subst s).
@@ -92,8 +96,8 @@ Lemma env_fv_subst s x : forall G,
   exists y, x \in typ_fv (s y) /\ y \in env_fv G.
 Proof.
   elim => //= ? ? IH.
-  rewrite mem_cat => /orP [ /typ_fv_subst | /IH ] [ y [ ? Hin ] ];
-  exists y; rewrite mem_cat Hin ?orbT; eauto.
+  rewrite inE => /orP [ /typ_fv_subst | /IH ] [ y [ ? ] ];
+  rewrite -topredE => /= Hin; exists y; rewrite inE Hin ?orbT; eauto.
 Qed.
 
 Lemma env_fv_subst_intro s x y : forall G,
@@ -102,7 +106,8 @@ Lemma env_fv_subst_intro s x y : forall G,
   x \in env_fv (env_subst s G).
 Proof.
   elim => //= ? ? IH.
-  rewrite !mem_cat => /orP [ ] Hin => [ /(typ_fv_subst_intro _ _ _ _ Hin) | /(IH Hin) ] -> //.
+  rewrite !inE => /orP [ ] Hin => [ /(typ_fv_subst_intro _ _ _ _ Hin) | /(IH Hin) ];
+  rewrite -topredE => /= -> //.
   by rewrite orbT.
 Qed.
 
@@ -111,17 +116,26 @@ Lemma env_bv_open s x : forall G,
   exists y, x \in typ_bv (s y) /\ y \in env_bv G.
 Proof.
   elim => //= ? ? IH.
-  rewrite mem_cat => /orP [ /typ_bv_open | /IH ] [ y [ ? Hin ] ];
-  exists y; rewrite mem_cat Hin ?orbT; eauto.
+  rewrite inE => /orP [ /typ_bv_open | /IH ] [ y [ ? ] ];
+  rewrite -topredE => /= Hin; exists y; rewrite inE Hin ?orbT; eauto.
+Qed.
+
+Definition env_enum_fv := foldr (fun T => typ_enum_fv^~T).
+
+Lemma env_enum_fv_inE x : forall G acc,
+  (x \in env_enum_fv acc G) = (x \in env_fv G) || (x \in acc).
+Proof.
+  elim => //= ? ? IH ?.
+  by rewrite typ_enum_fv_inE IH inE orbA.
 Qed.
 
 Inductive typed : env -> trm -> typ -> Prop :=
   | typed_var G x s T :
       (forall d, nth d G x = T) ->
-      (forall x, typ_bv (s x) = [::]) ->
+      (forall x, typ_bv (s x) =i pred0) ->
       typed G (trm_var x) (typ_open s T)
   | typed_abs G t T1 T2 :
-      typ_bv T1 = [::] ->
+      typ_bv T1 =i pred0 ->
       typed (T1 :: G) t T2 ->
       typed G (trm_abs t) (typ_arrow T1 T2)
   | typed_app G t1 t2 T1 T2 :
@@ -136,14 +150,16 @@ Hint Constructors typed.
 
 Lemma typed_closed G t T :
   typed G t T ->
-  typ_bv T = [::].
+  typ_bv T =i pred0.
 Proof.
-  induction 1 => //=.
-  - apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-    rewrite mem_undup. apply /negbTE /negP => /typ_bv_open [ ? [ ] ].
-    by rewrite H0.
-  - by rewrite H IHtyped.
-  - by move: IHtyped2 IHtyped1 => /= ->.
+  induction 1 => //= n; rewrite !inE; apply /negbTE.
+  - apply /negP => /typ_bv_open [ ? [ ] ].
+    by rewrite H0 inE.
+  - move: (H n) (IHtyped n).
+    by rewrite -!topredE => /= -> ->.
+  - move: (IHtyped1 n).
+    rewrite -!topredE => /= /negbT.
+    by rewrite negb_or => /andP [ ].
 Qed.
 
 Lemma typed_weaken G t T :
@@ -155,11 +171,9 @@ Proof.
   induction 1 => /= G' HG'; eauto.
   - case (HG' _ _ H) => ? [ ? [ ? -> ] ].
     rewrite typ_open_comp.
-    apply /typed_var => // ?.
-    apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-    rewrite mem_undup.
+    apply /typed_var => // ? n.
     apply /negbTE /negP => /typ_bv_open [ ? [ ] ].
-    by rewrite H0.
+    by rewrite H0 inE.
   - apply /typed_abs => //.
     apply /IHtyped => [ [ ? | ] /= ]; eauto.
     repeat (eexists; eauto). exact /Logic.eq_sym /typ_open_bvar.
@@ -171,44 +185,41 @@ Qed.
 Lemma typed_subst_typ G t T :
   typed G t T ->
   forall s,
-  (forall x, typ_bv (s x) = [::]) ->
+  (forall x, typ_bv (s x) =i pred0) ->
   typed (env_subst s G) t (typ_subst s T).
 Proof.
   induction 1 => s0 Hclosed /=; eauto.
   - rewrite typ_subst_open_distr => [ | ? ? ? ].
-    + apply /typed_var => ?.
+    + apply /typed_var => [ ? | ? ? ].
       * case (leqP (size G) x) => ?.
          { move: (H (typ_fvar 0)).
            by rewrite -(H (typ_bvar 0)) !nth_default // size_map. }
-         by rewrite /env_subst (nth_map (typ_fvar 0)) // H.
-      * apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-        rewrite mem_undup.
-        { apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
+        by rewrite /env_subst (nth_map (typ_fvar 0)) // H.
+      * { apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
           - by rewrite H0.
           - by rewrite Hclosed. }
     + by rewrite Hclosed.
-  - apply /typed_abs.
-    { apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup. apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
-      - by rewrite H.
-      - by rewrite Hclosed. }
-    exact /IHtyped.
-  - apply /(typed_let (env_fv G ++ typ_fv T1 ++ L)) => [ s' Hs' | ]; [ | exact /IHtyped ].
+  - apply /typed_abs => [ ? | ].
+    + apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
+      * by rewrite H.
+      * by rewrite Hclosed.
+    + exact /IHtyped.
+  - apply /(typed_let (env_enum_fv (typ_enum_fv L T1) G)) => [ s' Hs' | ]; [ | exact /IHtyped ].
     rewrite -(typ_subst_ext (fun x => if (x \notin env_fv G) && (x \notin typ_fv T1) then typ_fvar x else s0 x)) => [ | ? -> /= ].
     + rewrite typ_open_subst_distr => [ | x ? ? ].
       { rewrite -(typ_subst_ext (fun x => if (x \notin env_fv G) && (x \notin typ_fv T1) then typ_fvar x else s0 x)) => [ | /= ? /typ_fv_open [ -> /= | [ x [ ] ] ] ].
         - rewrite -(env_subst_ext (fun x => if (x \notin env_fv G) && (x \notin typ_fv T1) then typ_fvar x else s0 x)) => [ | ? -> // ].
           apply H0 => x.
           + case (Hs' x) => ? [ -> ].
-            rewrite !mem_cat !negb_or => /andP [ ? /andP [ ] ]. eauto.
-          + by rewrite (fun_if typ_bv) /= Hclosed if_same.
+            rewrite env_enum_fv_inE typ_enum_fv_inE !negb_or => /andP [ ? /andP [ ] ]. eauto.
+          + by case ((x \notin env_fv G) && (x \notin typ_fv T1)).
         - rewrite andbF typ_open_bvar_eq => // ?.
           by rewrite Hclosed.
         - case (Hs' x) => ? [ -> /= ].
-          rewrite mem_seq1 !mem_cat !negb_or => /andP [ HG /andP [ HT1 ? ] ] /eqP ?.
+          rewrite env_enum_fv_inE typ_enum_fv_inE !negb_or inE => /andP [ HG /andP [ HT1 ? ] ] /eqP ?.
           subst. by rewrite HG HT1. }
       case (Hs' x) => ? [ -> /= ].
-      rewrite mem_seq1 !mem_cat !negb_or => /andP [ HG /andP [ HT1 ? ] ] /eqP ?.
+      rewrite env_enum_fv_inE typ_enum_fv_inE !negb_or inE => /andP [ HG /andP [ HT1 ? ] ] /eqP ?.
       subst. by rewrite HG HT1.
     + by rewrite andbF.
 Qed.
@@ -229,7 +240,7 @@ Fixpoint typing n G t :=
   | trm_var x =>
       match nth None (map Some G) x with
       | None => None
-      | Some T => Some ((n + maximum (typ_bv T)).+1, typ_fvar, typ_open (typ_fvar \o addn n) T)
+      | Some T => Some ((n + maximum (typ_enum_bv [::] T)).+1, typ_fvar, typ_open (typ_fvar \o addn n) T)
       end
   | trm_abs t =>
       match typing n.+1 (typ_fvar n :: G) t with
@@ -266,7 +277,7 @@ Eval compute in (typing 0 [::] (trm_app (trm_abs (trm_app (trm_var 0) (trm_var 0
 
 Theorem typing_sound : forall t n m G s T,
   typing n G t = Some (m, s, T) ->
-  typed (env_subst s G) t T /\ forall x, typ_bv (s x) = [::].
+  typed (env_subst s G) t T /\ forall x, typ_bv (s x) =i pred0.
 Proof.
   elim => /=
     [ x ? ? G ? ?
@@ -288,59 +299,52 @@ Proof.
     case (IHt1 _ _ _ _ _ Htyping1) => ? Hs1bv.
     case (IHt2 _ _ _ _ _ Htyping2) => Htyped2 Hs2bv.
     have Htyped1' : typed (env_subst s2 (env_subst s1 G)) t1 (typ_subst s2 T1); eauto.
-    have : forall x : nat, typ_bv (s3 x) = [::] => Hs3bv.
-    { apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup.
-      apply /negbTE /negP => /(typ_bv_unify _ _ _ Hunify) /orP /=.
-      by rewrite (typed_closed _ _ _ Htyped1') mem_cat (typed_closed _ _ _ Htyped2). }
-    split => [ | ? ].
+    have : forall x : nat, typ_bv (s3 x) =i pred0 => [ ? x | Hs3bv ].
+    { apply /negbTE /negP => /(typ_bv_unify _ _ _ Hunify) [ | /= ].
+      - by rewrite (typed_closed _ _ _ Htyped1').
+      - move: (typed_closed _ _ _ Htyped2 x).
+        by rewrite -!topredE => /= ->. }
+    split => [ | ? ? ].
     + rewrite -!env_subst_comp.
       apply /(typed_app _ _ _ (typ_subst s3 T2)).
       * move: (typ_unify_sound _ _ _ Hunify) => /= <-.
         apply /typed_subst_typ; eauto.
       * apply /typed_subst_typ; eauto.
-    + apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup.
-      apply /negbTE /negP => /typ_bv_subst [ | [ ? [ /typ_bv_subst [ | [ ? [ ] ] ] ] ] ].
+    + apply /negbTE /negP => /typ_bv_subst [ | [ ? [ /typ_bv_subst [ | [ ? [ ] ] ] ] ] ].
       + by rewrite Hs1bv.
       + by rewrite Hs2bv.
       + by rewrite Hs3bv.
   - destruct (typing n G t1) as [ [ [ n1 s1 ] T1 ] | ] eqn:Htyping1 => //.
-    destruct (typing n1 (typ_subst (fun x => if x \in env_fv (env_subst s1 G) then typ_fvar x else typ_bvar x) T1 :: env_subst s1 G) t2) as [ [ [ n2 s2 ] T2 ] | ] eqn:Htyping2;
-    rewrite Htyping2; inversion 1. subst.
+    destruct (typing n1 (typ_subst (fun x => if x \in env_fv (env_subst s1 G) then typ_fvar x else typ_bvar x) T1 :: env_subst s1 G) t2) as [ [ [ n2 s2 ] T2 ] | ] eqn:Htyping2; inversion 1. subst.
     case (IHt1 _ _ _ _ _ Htyping1) => Htyped1 Hclosed1.
     case (IHt2 _ _ _ _ _ Htyping2) => ? Hclosed2.
-    split => [ | ? ].
+    split => [ | ? ? ].
     + rewrite -env_subst_comp.
-      apply /(typed_let (env_fv (env_subst s1 G))) => [ s Hs | ]; eauto.
+      apply /(typed_let (env_enum_fv [::] (env_subst s1 G))) => [ s Hs | ]; eauto.
       rewrite typ_subst_comp typ_open_subst_distr => [ | ? ].
       { rewrite typ_open_bvar_eq => [ | ? ].
         - rewrite (env_subst_ext s2 (typ_open s \o (typ_subst s2 \o (fun x => if x \in env_fv (env_subst s1 G) then typ_fvar x else typ_bvar x)))) => [ | ? /= -> /= ].
-          + apply /typed_subst_typ => //= x.
-            apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-            rewrite mem_undup.
+          + apply /typed_subst_typ => //= x ?.
             apply /negbTE /negP => /typ_bv_open [ y [ ] ].
             case (Hs y) => ? [ -> // ].
           + rewrite typ_open_bvar_eq => // ?.
             by rewrite Hclosed2.
         - by rewrite (typed_closed _ _ _ Htyped1). }
       by rewrite (typed_closed _ _ _ Htyped1).
-    + apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup.
-      apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
+    + apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
       * by rewrite Hclosed1.
       * by rewrite Hclosed2.
 Qed.
 
 Theorem typing_complete : forall t n G s T,
-  {in env_fv G, forall x, typ_bv (s x) = [::]} ->
+  {in env_fv G, forall x, typ_bv (s x) =i pred0} ->
   (forall x, x \in env_fv G -> x < n) ->
   typed (env_subst s G) t T ->
   exists m s' s'' T', typing n G t = Some (m, s', T')
     /\ n <= m
     /\ T = typ_subst s'' T'
-    /\ typ_bv T' = [::]
-    /\ (forall x, typ_bv (s' x) = [::])
+    /\ typ_bv T' =i pred0
+    /\ (forall x, typ_bv (s' x) =i pred0)
     /\ (forall x y, x \in typ_fv (s' y) -> x = y \/ x < m)
     /\ (forall x, x \in typ_fv T' -> x < m)
     /\ (forall x, x < n -> s x = typ_subst s'' (s' x)).
@@ -349,8 +353,8 @@ Proof.
   - case (leqP (size G) x) => ?.
     { move: (H1 (typ_fvar 0)).
       by rewrite -(H1 (typ_bvar 0)) !nth_default // size_map. }
-    exists ((n + maximum (typ_bv (nth (typ_fvar 0) G x))).+1), typ_fvar, (fun x => if x < n then s x else s0 (x - n)), (typ_open (typ_fvar \o addn n) (nth (typ_fvar 0) G x)).
-    (repeat split) => [ | | | | ? ? /= | ? /typ_fv_open [ ? | [ ? [ /= ] ] ] | ? /= -> // ].
+    exists ((n + maximum (typ_enum_bv [::] (nth (typ_fvar 0) G x))).+1), typ_fvar, (fun x => if x < n then s x else s0 (x - n)), (typ_open (typ_fvar \o addn n) (nth (typ_fvar 0) G x)).
+    (repeat split) => [ | | | ? | ? ? /= | ? /typ_fv_open [ ? | [ ? [ /= ] ] ] | ? /= -> // ].
     + by rewrite (nth_map (typ_fvar 0)).
     + apply /leqW /leq_addr.
     + rewrite -(H1 (typ_fvar 0)) /env_subst (nth_map (typ_fvar 0)) // typ_subst_open_distr => [ | /= x0 ? ? ].
@@ -359,32 +363,30 @@ Proof.
           by rewrite ltnNge leq_addr /= addKn.
         - by rewrite HG // (env_fv_intro (nth (typ_fvar 0) G x)) // mem_nth. }
       by rewrite HG ?Hclos // (env_fv_intro (nth (typ_fvar 0) G x)) // mem_nth.
-    + apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup. apply /negbTE /negP => /typ_bv_open [ ? [ //= ] ].
-    + rewrite mem_seq1 => /eqP. eauto.
+    + apply /negbTE /negP => /typ_bv_open [ ? [ //= ] ].
+    + rewrite inE => /eqP. eauto.
     + apply /leqW /ltn_addr /HG /(env_fv_intro (nth (typ_fvar 0) G x)) => //.
       exact /mem_nth.
-    + rewrite mem_seq1 => /eqP -> ?.
-      by rewrite ltnS leq_add2l maximum_sup.
-  - move: (IHt n.+1 (typ_fvar n :: G) (fun x => if x < n then s x else T1) T2) => /= [ x | ? | | n1 [ s1 [ s' [ T' [ -> [ Hn1 [ -> [ ? [ Hs1bv [ Hs1fv [ HT'fv Hs1 ] ] ] ] ] ] ] ] ] ] ].
-    { rewrite in_cons => /orP [ /eqP -> | Hin ].
-      - by rewrite ltnn H1.
-      - by rewrite HG // Hclos. }
-    { rewrite in_cons => /orP [ /eqP -> | /HG /leqW // ].
+    + rewrite inE => /eqP -> ?.
+      by rewrite ltnS leq_add2l maximum_sup // typ_enum_bv_inE in_nil orbF.
+  - move: (IHt n.+1 (typ_fvar n :: G) (fun x => if x < n then s x else T1) T2) => /= [ x | ? | | n1 [ s1 [ s' [ T' [ -> [ Hn1 [ -> [ HT'bv [ Hs1bv [ Hs1fv [ HT'fv Hs1 ] ] ] ] ] ] ] ] ] ] ].
+    { rewrite !inE => /orP [ /eqP -> | Hin ].
+      - by rewrite ltnn.
+      - rewrite HG //. exact /Hclos /Hin. }
+    { rewrite !inE => /orP [ /eqP -> | /HG /leqW // ].
       exact /leqnn. }
     { by rewrite ltnn -(env_subst_ext s) => // ? /HG ->. }
     exists n1, s1, s', (typ_arrow (s1 n) T').
-    (repeat split) => //= [ | | | ? | ? Hlt ].
+    (repeat split) => //= [ | | x | ? | ? Hlt ].
     + exact /ltnW.
     + by rewrite -Hs1 // ltnn.
-    + by rewrite Hs1bv.
-    + by rewrite mem_cat => /orP [ /Hs1fv [ -> | ] | /HT'fv ].
+    + move: (HT'bv x) (Hs1bv n x).
+      by rewrite -!topredE => /= -> ->.
+    + by rewrite inE => /orP [ /Hs1fv [ -> | ] | /HT'fv ].
     + rewrite -Hs1 ?Hlt => //. exact /leqW.
   - move: (IHt1 n G s (typ_arrow T1 T)) => [ ] // n1 [ s1 [ s' [ T2' [ -> [ Hn1 [ HT [ HT2'bv [ Hs1bv [ Hs1fv [ HTfv Hs ] ] ] ] ] ] ] ] ] ].
-    move: (IHt2 n1 (env_subst s1 G) s' T1) => [ ? /env_fv_subst [ x [ ? ? ] ] | ? /env_fv_subst [ ? [ /Hs1fv [ -> /HG /((@leq_trans _ _ _)^~Hn1) | ] // ] ] | | n2 [ s2 [ s'' [ T1' [ -> [ Hn2 [ HT1 [ HT1'bv [ Hs2bv [ Hs2fv [ HT1fv Hs' ] ] ] ] ] ] ] ] ] ] ].
-    { apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // z.
-      rewrite mem_undup.
-      apply /negbTE /negP => ?.
+    move: (IHt2 n1 (env_subst s1 G) s' T1) => [ ? /env_fv_subst [ x [ ? ? ] ] z | ? /env_fv_subst [ ? [ /Hs1fv [ -> /HG /((@leq_trans _ _ _)^~Hn1) | ] // ] ] | | n2 [ s2 [ s'' [ T1' [ -> [ Hn2 [ HT1 [ HT1'bv [ Hs2bv [ Hs2fv [ HT1fv Hs' ] ] ] ] ] ] ] ] ] ] ].
+    { apply /negbTE /negP => ?.
       have : z \in typ_bv (typ_subst s' (s1 x)).
       { apply /typ_bv_subst_intro_sub; eauto. }
       by rewrite -Hs ?Hclos ?HG. }
@@ -394,70 +396,63 @@ Proof.
       rewrite typ_subst_comp (typ_subst_ext (typ_subst s'' \o s2) s') => [ | ? /HTfv /Hs' -> // ].
       congruence. }
     rewrite Hunify.
-    have : forall x, typ_bv (s3 x) = [::] => Hs3bv.
-    { apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup.
-      apply /negbTE /negP => /(typ_bv_unify _ _ _ Hunify) [ /typ_bv_subst [ | [ ? [ ] ] ] | /= ].
+    have : forall x, typ_bv (s3 x) =i pred0 => [ ? x | Hs3bv ].
+    { apply /negbTE /negP => /(typ_bv_unify _ _ _ Hunify) [ /typ_bv_subst [ | [ ? [ ] ] ] | /= ].
       - by rewrite HT2'bv.
       - by rewrite Hs2bv.
-      - by rewrite HT1'bv. }
+      - rewrite !inE orbF.
+        exact /negP /negbT /HT1'bv. }
     exists n2.+1, (typ_subst (typ_subst s3 \o s2) \o s1), s''', (s3 n2).
-    (repeat split) => [ | | | x | ? ? /typ_fv_subst [ ? [ /typ_fv_subst [ ? [ /(typ_fv_unify _ _ _ Hunify) [ -> /Hs2fv [ -> /Hs1fv [ | /((@leq_trans _ _ _)^~Hn2) ] | ] | [ /typ_fv_subst [ ? [ /Hs2fv [ -> /HTfv /((@leq_trans _ _ _)^~Hn2) | ] ] ] | /= ] ] ] ] ] ] | ? /(typ_fv_unify _ _ _ Hunify) [ -> | [ /typ_fv_subst [ ? [ /Hs2fv [ -> /HTfv /((@leq_trans _ _ _)^~Hn2) | ] ] ] | /= ] ] | ? ? /= ]; eauto.
+    (repeat split) => [ | | // | x ? | ? ? /typ_fv_subst [ ? [ /typ_fv_subst [ ? [ /(typ_fv_unify _ _ _ Hunify) [ -> /Hs2fv [ -> /Hs1fv [ | /((@leq_trans _ _ _)^~Hn2) ] | ] | [ /typ_fv_subst [ ? [ /Hs2fv [ -> /HTfv /((@leq_trans _ _ _)^~Hn2) | ] ] ] | /= ] ] ] ] ] ] | ? /(typ_fv_unify _ _ _ Hunify) [ -> | [ /typ_fv_subst [ ? [ /Hs2fv [ -> /HTfv /((@leq_trans _ _ _)^~Hn2) | ] ] ] | /= ] ] | ? ? /= ]; eauto.
     + apply /leqW /leq_trans; eauto.
     + by rewrite -(Hgen (typ_fvar n2)) /= ltnn.
-    + apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup.
-      apply /negbTE /negP => /typ_bv_subst [ | [ ? [ /typ_bv_subst [ | [ ? [ ] ] ] ] ] ].
+    + apply /negbTE /negP => /typ_bv_subst [ | [ ? [ /typ_bv_subst [ | [ ? [ ] ] ] ] ] ].
       * by rewrite Hs1bv.
       * by rewrite Hs2bv.
       * by rewrite Hs3bv.
-    + rewrite mem_cat mem_seq1 => /orP [ /HT1fv | /eqP -> ]; eauto.
-    + rewrite mem_cat mem_seq1 => /orP [ /HT1fv | /eqP -> ]; eauto.
+    + rewrite !inE => /orP [ /HT1fv | /eqP -> ]; eauto.
+    + rewrite !inE => /orP [ /HT1fv | /eqP -> ]; eauto.
     + rewrite Hs // (typ_subst_ext s' (typ_subst s'' \o s2)) => [ | ? /Hs1fv /= [ -> | /Hs' -> // ] ].
       * rewrite -!typ_subst_comp -Hgen.
         apply /typ_subst_ext => ? /typ_fv_subst [ ? [ /Hs2fv [ <- /Hs1fv [ -> | /((@leq_trans _ _ _)^~Hn2) -> ] | -> ] // ] ].
         by rewrite ((@leq_trans _ _ _)^~Hn2) // ((@leq_trans _ _ _)^~Hn1).
       * exact /Hs' /((@leq_trans _ _ _)^~Hn1).
-  - move: (IHt1 n G s (typ_open (typ_fvar \o addn (maximum (typ_fv T1 ++ env_fv (env_subst s G) ++ L)).+1) T1)) => [ | | | n1' [ s1 [ s' [ T1' [ -> [ Hn1 [ HT [ HT1'bv [ Hs1bv [ Hs1fv [ HTfv Hs ] ] ] ] ] ] ] ] ] ] ] //.
+  - move: (IHt1 n G s (typ_open (typ_fvar \o addn (maximum (env_enum_fv (typ_enum_fv L T1) (env_subst s G))).+1) T1)) => [ | | | n1' [ s1 [ s' [ T1' [ -> [ Hn1 [ HT [ HT1'bv [ Hs1bv [ Hs1fv [ HTfv Hs ] ] ] ] ] ] ] ] ] ] ] //.
     { apply /H3 => x. repeat eexists.
-      have : (maximum (typ_fv T1 ++ env_fv (env_subst s G) ++ L)).+1 + x \notin typ_fv T1 ++ env_fv (env_subst s G) ++ L.
-      { apply /negP => /maximum_sup.
-        by rewrite addSn ltnNge leq_addr. }
-      by rewrite !mem_cat !negb_or => /andP [ ? /andP [ ] ]. }
+      apply /negP => HinL.
+      have : (maximum (env_enum_fv (typ_enum_fv L T1) (env_subst s G))).+1 + x \in env_enum_fv (typ_enum_fv L T1) (env_subst s G) => [ | /maximum_sup ].
+      { by rewrite env_enum_fv_inE typ_enum_fv_inE HinL !orbT. }
+      by rewrite addSn ltnNge leq_addr. }
     move: (IHt2 n1' (typ_subst (fun x => if x \in env_fv (env_subst s1 G) then typ_fvar x else typ_bvar x) T1' :: env_subst s1 G) s' T) =>
       /= [ ? | ? | | n2' [ s2 [ s'' [ T2' [ -> [ Hn2 [ HT2' [ HT2'bv [ Hs2bv [ Hs2fv [ HT2fv Hs' ] ] ] ] ] ] ] ] ] ] ] //.
-    { rewrite mem_cat => /orP [ /typ_fv_subst [ x [ ] ] | /env_fv_subst [ x [ ? ? ] ] ].
-      - destruct (x \in env_fv (env_subst s1 G)) eqn:Hfv; rewrite Hfv //= mem_seq1 => /eqP <- ?.
-        apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // z.
-        rewrite mem_undup.
+    { rewrite inE => /orP [ /typ_fv_subst [ x [ ] ] | /env_fv_subst [ x [ ? ? ] ] z ].
+      - destruct (x \in env_fv (env_subst s1 G)) eqn:Hfv => //=; rewrite inE => /eqP <- ? z.
         apply /negbTE /negP => ?.
         have : z \in typ_bv (typ_subst s' T1').
         { apply /typ_bv_subst_intro_sub; eauto. }
         by rewrite -HT => /typ_bv_open [ ? [ ] ].
-      - apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // z.
-        rewrite mem_undup.
-        apply /negbTE /negP => ?.
+      - apply /negbTE /negP => ?.
         have : z \in typ_bv (typ_subst s' (s1 x)).
         { apply/ typ_bv_subst_intro_sub; eauto. }
         by rewrite -Hs ?Hclos ?HG. }
-    { rewrite mem_cat => /orP [ /typ_fv_subst [ y [ ] ] | /env_fv_subst [ ? [ /Hs1fv [ -> /HG /((@leq_trans _ _ _)^~Hn1) | ] ] ] ] //.
+    { rewrite inE => /orP [ /typ_fv_subst [ y [ ] ] | /env_fv_subst [ ? [ /Hs1fv [ -> /HG /((@leq_trans _ _ _)^~Hn1) | ] ] ] ] //.
       move: (y \in env_fv (env_subst s1 G)) => [ /= | // ].
-      by rewrite mem_seq1 => /eqP -> /HTfv. }
+      by rewrite inE => /eqP -> /HTfv. }
     { apply /(typed_weaken _ _ _ H5) => [ [ ? /(_ (typ_fvar 0)) <- | i ? Hnth ] /= ].
-      - move: (f_equal (typ_subst (fun x => if x <= maximum (typ_fv T1 ++ env_fv (env_subst s G) ++ L) then typ_fvar x else typ_bvar (x - (maximum (typ_fv T1 ++ env_fv (env_subst s G) ++ L)).+1))) HT).
+      - move: (f_equal (typ_subst (fun x => if x <= maximum (env_enum_fv (typ_enum_fv L T1) (env_subst s G)) then typ_fvar x else typ_bvar (x - (maximum (env_enum_fv (typ_enum_fv L T1) (env_subst s G))).+1))) HT).
         rewrite typ_subst_open_distr => [ | x Hin ? ].
         + rewrite typ_subst_fvar_eq => [ | x Hin ].
           { rewrite typ_open_bvar_eq => [ -> | ? ? /= ].
-            - exists (typ_subst (fun x => if x <= maximum (typ_fv T1 ++ env_fv (env_subst s G) ++ L) then typ_fvar x else typ_bvar (x - (maximum (typ_fv T1 ++ env_fv (env_subst s G) ++ L)).+1)) \o s').
+            - exists (typ_subst (fun x => if x <= maximum (env_enum_fv (typ_enum_fv L T1) (env_subst s G)) then typ_fvar x else typ_bvar (x - (maximum (env_enum_fv (typ_enum_fv L T1) (env_subst s G))).+1)) \o s').
               repeat eexists.
               rewrite !typ_subst_comp typ_open_subst_distr => [ | ? ].
               + rewrite typ_open_bvar_eq => [ | ? ].
                 { apply /typ_subst_ext => x ? /=.
                   rewrite fun_if /= fun_if /=.
-                  destruct (x \in env_fv (env_subst s1 G)) eqn:Henv; rewrite Henv //.
+                  destruct (x \in env_fv (env_subst s1 G)) eqn:Henv => //.
                   rewrite typ_open_bvar_eq => [ | y ? ].
                   - rewrite typ_subst_fvar_eq => [ // | y Hin ].
-                    rewrite maximum_sup // !mem_cat -(env_subst_ext (typ_subst s' \o s1)) => [ | ? /HG /Hs // ].
+                    rewrite maximum_sup // env_enum_fv_inE typ_enum_fv_inE -(env_subst_ext (typ_subst s' \o s1)) => [ | ? /HG /Hs // ].
                     by rewrite -env_subst_comp (env_fv_subst_intro _ _ x) // orbT.
                   - have : y \in typ_bv (typ_subst s' T1').
                     { apply /typ_bv_subst_intro_sub; eauto. }
@@ -465,17 +460,16 @@ Proof.
                 by rewrite HT1'bv.
               + by rewrite HT1'bv.
             - by rewrite addSn ltnNge leq_addr /= subSS addKn. }
-          by rewrite maximum_sup // mem_cat Hin.
-        + by rewrite maximum_sup // mem_cat Hin.
+          by rewrite maximum_sup // env_enum_fv_inE typ_enum_fv_inE Hin orbT.
+        + by rewrite maximum_sup // env_enum_fv_inE typ_enum_fv_inE Hin orbT.
       - rewrite env_subst_comp (env_subst_ext (typ_subst s' \o s1) s) => [ | ? /HG /Hs // ].
         repeat eexists.
         + exact /Hnth.
         + exact /Logic.eq_sym /typ_open_bvar. }
     exists n2', (typ_subst s2 \o s1), s'', T2'.
-    (repeat split) => //= [ | ? | ? ? /typ_fv_subst [ ? [ /Hs2fv [ -> /Hs1fv [ | /((@leq_trans _ _ _)^~Hn2) ] | ] ] ] | ? ? ]; eauto.
+    (repeat split) => //= [ | ? ? | ? ? /typ_fv_subst [ ? [ /Hs2fv [ -> /Hs1fv [ | /((@leq_trans _ _ _)^~Hn2) ] | ] ] ] | ? ? ]; eauto.
     + exact /(leq_trans Hn1).
-    + apply /undup_nil /perm_eq_nilP /(uniq_perm_eq (undup_uniq _)) => // ?.
-      rewrite mem_undup. apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
+    + apply /negbTE /negP => /typ_bv_subst [ | [ ? [ ] ] ].
       * by rewrite Hs1bv.
       * by rewrite Hs2bv.
     + rewrite Hs // (typ_subst_ext s' (typ_subst s'' \o s2)) ?typ_subst_comp => /= [ // | ? /Hs1fv [ -> | ] ];
