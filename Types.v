@@ -24,12 +24,48 @@ Fixpoint typ_fv T : pred nat :=
   | typ_arrow T1 T2 => predU (typ_fv T1) (typ_fv T2)
   end.
 
+Fixpoint typ_enum_fv T acc :=
+  match T with
+  | typ_fvar x => x :: acc
+  | typ_bvar x => acc
+  | typ_arrow T1 T2 => typ_enum_fv T1 (typ_enum_fv T2 acc) 
+  end.
+
 Fixpoint typ_bv T : pred nat :=
   match T with
   | typ_fvar _ => pred0
   | typ_bvar x => pred1 x
   | typ_arrow T1 T2 => predU (typ_bv T1) (typ_bv T2)
   end.
+
+Fixpoint typ_enum_bv T acc :=
+  match T with
+  | typ_fvar x => acc
+  | typ_bvar x => x :: acc
+  | typ_arrow T1 T2 => typ_enum_bv T1 (typ_enum_bv T2 acc)
+  end.
+
+Lemma typ_enum_fv_inE_aux x : forall T acc,
+  (x \in typ_enum_fv T acc) = (x \in typ_fv T) || (x \in acc).
+Proof.
+  elim => //= ? IHT1 ? IHT2 ?.
+  by rewrite IHT1 IHT2 inE orbA.
+Qed.
+
+Corollary typ_enum_fv_inE x T :
+  (x \in typ_enum_fv T [::]) = (x \in typ_fv T).
+Proof. by rewrite typ_enum_fv_inE_aux orbF. Qed.
+
+Lemma typ_enum_bv_inE_aux x : forall T acc,
+  (x \in typ_enum_bv T acc) = (x \in typ_bv T) || (x \in acc).
+Proof.
+  elim => //= ? IHT1 ? IHT2 ?.
+  by rewrite IHT1 IHT2 inE orbA.
+Qed.
+
+Corollary typ_enum_bv_inE x T :
+  (x \in typ_enum_bv T [::]) = (x \in typ_bv T).
+Proof. by rewrite typ_enum_bv_inE_aux orbF. Qed.
 
 Fixpoint typ_subst s T :=
   match T with
@@ -81,48 +117,65 @@ Lemma typ_subst_comp s s' T :
   typ_subst s (typ_subst s' T) = typ_subst (typ_subst s \o s') T.
 Proof. by induction T => /=; congruence. Qed.
 
-Lemma typ_fv_subst s T x :
-  x \in typ_fv (typ_subst s T) ->
-  exists y, x \in typ_fv (s y) /\ y \in typ_fv T.
+Lemma typ_fv_subst_aux s T x acc :
+  has (fun y => x \in typ_fv (s y)) (typ_enum_fv T acc)
+  = has (fun y => x \in typ_fv (s y)) acc || (x \in typ_fv (typ_subst s T)).
 Proof.
-  induction T => //= [ Hin | ].
-  - exists x0.
-    by rewrite Hin inE eqxx.
-  - rewrite inE => /orP [ /IHT1 | /IHT2 ] [ y [ Hs ] ];
-    rewrite -topredE => /= Hfv; exists y; by rewrite Hs inE Hfv ?orbT.
+  rewrite orbC.
+  elim: T acc => //= ? IHT1 ? IHT2 ?.
+  by rewrite IHT1 IHT2 inE orbA.
 Qed.
 
-Lemma typ_fv_subst_intro s T x y :
+Corollary typ_fv_subst s T x :
+  (x \in typ_fv (typ_subst s T)) = has (fun y => x \in typ_fv (s y)) (typ_enum_fv T [::]).
+Proof. exact /Logic.eq_sym /typ_fv_subst_aux. Qed.
+
+Corollary typ_fv_subst_elim s T x :
+  x \in typ_fv (typ_subst s T) ->
+  exists2 y, x \in typ_fv (s y) & y \in typ_fv T.
+Proof.
+  rewrite typ_fv_subst => /hasP [ ? ].
+  rewrite typ_enum_fv_inE => /=. eauto.
+Qed.
+
+Corollary typ_fv_subst_intro s T x y :
   y \in typ_fv T ->
   x \in typ_fv (s y) ->
   x \in typ_fv (typ_subst s T).
 Proof.
-  induction T => //=.
-  - by rewrite inE => /eqP ->.
-  - rewrite inE => /orP [ ] Hin => [ /(IHT1 Hin) | /(IHT2 Hin) ];
-    rewrite inE -topredE => /= -> //; by rewrite orbT.
+  rewrite -typ_enum_fv_inE typ_fv_subst => ? ?.
+  apply /hasP. eauto.
 Qed.
 
-Lemma typ_bv_subst s T x :
-  x \in typ_bv (typ_subst s T) ->
-  x \in typ_bv T \/ exists y, x \in typ_bv (s y) /\ y \in typ_fv T.
+Lemma typ_bv_subst_aux s x T acc :
+  (x \in typ_bv (typ_subst s T)) || has (fun y => x \in typ_bv (s y)) acc
+  = (x \in typ_bv T) || has (fun y => x \in typ_bv (s y)) (typ_enum_fv T acc).
 Proof.
-  induction T => /= [ Hin | | ]; eauto.
-  - right. exists x0. rewrite inE eqxx. eauto.
-  - rewrite !inE => /orP [ /IHT1 | /IHT2 ];
-    (move => [ | [ y [ Hs ] ] ]; rewrite -topredE) => /= [ -> | Hfv ]; rewrite ?orbT; eauto;
-    right; exists y; by rewrite Hs inE Hfv ?orbT.
+  rewrite -!topredE /=.
+  elim: T acc => //= T1 IHT1 T2 IHT2 ?.
+  by rewrite (orbC (typ_bv T1 x) (typ_bv T2 x)) -!orbA -IHT1 IHT2 !orbA (orbC (typ_bv T2 x)).
 Qed.
 
-Lemma typ_bv_subst_intro_sub s T x y :
+Corollary typ_bv_subst s x T :
+  (x \in typ_bv (typ_subst s T))
+  = (x \in typ_bv T) || has (fun y => x \in typ_bv (s y)) (typ_enum_fv T [::]).
+Proof. by rewrite -typ_bv_subst_aux orbF. Qed.
+
+Corollary typ_bv_subst_elim s T x :
+  x \in typ_bv (typ_subst s T) ->
+  x \in typ_bv T \/ exists2 y, x \in typ_bv (s y) & y \in typ_fv T.
+Proof.
+  rewrite typ_bv_subst => /orP [ | /hasP [ ? ] ];
+  [ | rewrite typ_enum_fv_inE ]; eauto.
+Qed.
+
+Corollary typ_bv_subst_intro_sub s T x y :
   y \in typ_fv T ->
   x \in typ_bv (s y) ->
   x \in typ_bv (typ_subst s T).
 Proof.
-  induction T => //=.
-  - by rewrite inE => /eqP ->.
-  - rewrite !inE => /orP [ ] Hin => [ /(IHT1 Hin) | /(IHT2 Hin) ];
-    rewrite -topredE => /= -> //; by rewrite orbT.
+  rewrite typ_bv_subst -typ_enum_fv_inE => ? ?.
+  apply /orP /or_intror /hasP. eauto.
 Qed.
 
 Lemma typ_open_bvar T : typ_open typ_bvar T = T.
@@ -149,26 +202,47 @@ Qed.
 Lemma typ_open_comp s s' T : typ_open s (typ_open s' T) = typ_open (typ_open s \o s') T.
 Proof. induction T => /=; congruence. Qed.
 
-Lemma typ_bv_open s T x :
-  x \in typ_bv (typ_open s T) ->
-  exists y, x \in typ_bv (s y) /\ y \in typ_bv T.
+Lemma typ_bv_open_aux s x : forall T acc,
+  has (fun y => x \in typ_bv (s y)) (typ_enum_bv T acc)
+  = (x \in typ_bv (typ_open s T)) || has (fun y => x \in typ_bv (s y)) acc.
 Proof.
-  induction T => //= [ Hin | ].
-  - exists n.
-    by rewrite Hin inE eqxx.
-  - rewrite inE => /orP [ /IHT1 | /IHT2 ] [ y [ Hs ] ];
-    rewrite -topredE => /= Hbv; exists y; by rewrite Hs inE Hbv ?orbT.
+  elim => //= ? IHT1 ? IHT2 ?.
+  by rewrite IHT1 IHT2 -orbA.
 Qed.
 
-Lemma typ_fv_open s T x :
-  x \in typ_fv (typ_open s T) ->
-  x \in typ_fv T \/ exists y, x \in typ_fv (s y) /\ y \in typ_bv T.
+Corollary typ_bv_open s T x :
+  (x \in typ_bv (typ_open s T))
+  = has (fun y => x \in typ_bv (s y)) (typ_enum_bv T [::]).
+Proof. by rewrite typ_bv_open_aux orbF. Qed.
+
+Lemma typ_bv_open_elim s T x :
+  x \in typ_bv (typ_open s T) ->
+  exists2 y, x \in typ_bv (s y) & y \in typ_bv T.
 Proof.
-  induction T => /= [ ? | | ]; eauto.
-  - right. exists n. rewrite inE eqxx. eauto.
-  - rewrite !inE => /orP [ /IHT1 | /IHT2 ];
-    (move => [ | [ y [ Hs ] ] ]; rewrite -topredE) => /= [ -> | Hbv ]; rewrite ?orbT; eauto;
-    right; exists y; by rewrite Hs inE Hbv ?orbT.
+  rewrite typ_bv_open => /hasP [ ? ].
+  rewrite typ_enum_bv_inE. eauto.
+Qed.
+
+Lemma typ_fv_open_aux s x T acc :
+  (x \in typ_fv (typ_open s T)) || has (fun y => x \in typ_fv (s y)) acc
+  = (x \in typ_fv T) || has (fun y => x \in typ_fv (s y)) (typ_enum_bv T acc).
+Proof.
+  rewrite -!topredE /=.
+  elim: T acc => //= T1 IHT1 T2 IHT2 ?.
+  by rewrite (orbC (typ_fv T1 x) (typ_fv T2 x)) -!orbA -IHT1 IHT2 !orbA (orbC (typ_fv T2 x)).
+Qed.
+
+Corollary typ_fv_open s x T :
+  (x \in typ_fv (typ_open s T))
+  = (x \in typ_fv T) || has (fun y => x \in typ_fv (s y)) (typ_enum_bv T [::]).
+Proof. by rewrite -typ_fv_open_aux orbF. Qed.
+
+Corollary typ_fv_open_elim s T x :
+  x \in typ_fv (typ_open s T) ->
+  x \in typ_fv T \/ exists2 y, x \in typ_fv (s y) & y \in typ_bv T.
+Proof.
+  rewrite typ_fv_open => /orP [ | /hasP [ ? ] ];
+  [ | rewrite typ_enum_bv_inE ]; eauto.
 Qed.
 
 Lemma typ_subst_open_distr s s' T :
@@ -398,7 +472,7 @@ Section UnifyInner.
           by rewrite (negbTE Hoccur).
         - rewrite inE => /eqP ?. subst.
           by rewrite Hx andbT. }
-      { rewrite rem_filter // mem_filter /= => /typ_fv_subst /= [ w [ ] ].
+      { rewrite rem_filter // mem_filter /= => /typ_fv_subst_elim /= [ w ].
         case (@eqP _ w z) => /= [ | /eqP ] ?; subst.
         - case (@eqP _ y z) => /= [ -> | ? /HT // ].
           by rewrite (negbTE Hoccur).
@@ -494,7 +568,7 @@ Section UnifyInner.
     - by case (x \in typ_fv T2); inversion 1.
     - destruct (unify (if x == z then T else typ_fvar x) (typ_subst [eta typ_fvar with z |-> T] T2)) eqn:Hunify; inversion 1.
       split; eauto.
-      refine (typ_bv_unify _ _ _ _ _ _ _ Hunify) => // ? => [ | /typ_bv_subst [ /HT2 // | [ y [ /= ] ] ] ].
+      refine (typ_bv_unify _ _ _ _ _ _ _ Hunify) => // ? => [ | /typ_bv_subst_elim [ /HT2 // | [ y /= ] ] ].
       + by case (x == z) => // /HT.
       + by case (y == z) => // /HT.
   Qed.
@@ -589,43 +663,15 @@ Proof.
   - exact /typ_unify_inner_bound.
 Qed.
 
-Fixpoint typ_enum_fv acc T :=
-  match T with
-  | typ_fvar x => x :: acc
-  | typ_bvar x => acc
-  | typ_arrow T1 T2 => typ_enum_fv (typ_enum_fv acc T2) T1
-  end.
-
-Fixpoint typ_enum_bv acc T :=
-  match T with
-  | typ_fvar x => acc
-  | typ_bvar x => x :: acc
-  | typ_arrow T1 T2 => typ_enum_bv (typ_enum_bv acc T2) T1
-  end.
-
-Lemma typ_enum_fv_inE x : forall T acc,
-  (x \in typ_enum_fv acc T) = (x \in typ_fv T) || (x \in acc).
-Proof.
-  elim => //= ? IHT1 ? IHT2 ?.
-  by rewrite IHT1 IHT2 inE orbA.
-Qed.
-
-Lemma typ_enum_bv_inE x : forall T acc,
-  (x \in typ_enum_bv acc T) = (x \in typ_bv T) || (x \in acc).
-Proof.
-  elim => //= ? IHT1 ? IHT2 ?.
-  by rewrite IHT1 IHT2 inE orbA.
-Qed.
-
 Definition typ_unify T1 T2 :=
-  omap (fun s => typ_subst_seq^~s \o typ_fvar) (typ_unify_outer (size (typ_enum_fv (typ_enum_fv [::] T2) T1)) T1 T2 [::]).
+  omap (fun s => typ_subst_seq^~s \o typ_fvar) (typ_unify_outer (size (typ_enum_fv T1 (typ_enum_fv T2 [::]))) T1 T2 [::]).
 
 Lemma valid_subst_seq_fv : forall s L,
   uniq L ->
   valid_subst_seq L s ->
   forall x T, x \in typ_fv (typ_subst_seq T s) -> (x \in typ_fv T) || (x \in L).
 Proof.
-  elim => /= [ ? ? ? ? ? -> // | [ y ? ] ? IH ? Huniq [ /andP [ ? ? ] [ HT0 Hvalid ] ] ? ? /(IH _ (rem_uniq _ Huniq) Hvalid) /orP [ /typ_fv_subst /= [ x [ ] ] | ] ].
+  elim => /= [ ? ? ? ? ? -> // | [ y ? ] ? IH ? Huniq [ /andP [ ? ? ] [ HT0 Hvalid ] ] ? ? /(IH _ (rem_uniq _ Huniq) Hvalid) /orP [ /typ_fv_subst_elim /= [ x ] | ] ].
   - case (@eqP _ x y) => /= [ -> /HT0 -> | ? ].
     + by rewrite orbT.
     + by rewrite inE => /eqP -> ->.
@@ -638,7 +684,7 @@ Theorem typ_unify_sound T1 T2 s :
   typ_subst s T1 = typ_subst s T2.
 Proof.
   rewrite /typ_unify.
-  destruct (typ_unify_outer (size (typ_enum_fv (typ_enum_fv [::] T2) T1)) T1 T2 [::]) eqn:Hunify; inversion 1. subst.
+  destruct (typ_unify_outer (size (typ_enum_fv T1 (typ_enum_fv T2 [::]))) T1 T2 [::]) eqn:Hunify; inversion 1. subst.
   move: (typ_unify_outer_sound _ _ _ _ _ Hunify) => /= [ ? [ ?  ] ].
   by rewrite !typ_subst_seq_typ_subst.
 Qed.
@@ -651,16 +697,16 @@ Lemma typ_unify_complete_aux T1 T2 s :
 Proof.
   move => Hunifies.
   rewrite /typ_unify.
-  case (typ_unify_outer_complete (undup (typ_enum_fv (typ_enum_fv [::] T2) T1)) (size (typ_enum_fv (typ_enum_fv [::] T2) T1)) [::] s T1 T2)
+  case (typ_unify_outer_complete (undup (typ_enum_fv T1 (typ_enum_fv T2 [::]))) (size (typ_enum_fv T1 (typ_enum_fv T2 [::]))) [::] s T1 T2)
     => //= [ | | ? | ? | ? [ Hvalid [ -> [ ? Hgen ] ] ] ].
   - by rewrite size_undup.
   - exact: undup_uniq.
-  - by rewrite mem_undup typ_enum_fv_inE => ->.
-  - rewrite mem_undup !typ_enum_fv_inE => ->. exact: orbT.
+  - by rewrite mem_undup typ_enum_fv_inE_aux => ->.
+  - rewrite mem_undup !typ_enum_fv_inE_aux => ->. exact: orbT.
   - (repeat eexists) => [ ? | ? ? /(valid_subst_seq_fv _ _ (undup_uniq _) Hvalid) /= /orP [ ] ].
     + by rewrite Hgen typ_subst_seq_typ_subst.
     + rewrite inE => /eqP; eauto.
-    + rewrite mem_undup !typ_enum_fv_inE in_nil => /orP [ -> | /orP [ -> | // ] ]; eauto.
+    + rewrite mem_undup !typ_enum_fv_inE_aux in_nil => /orP [ -> | /orP [ -> | // ] ]; eauto.
 Qed.
 
 Theorem typ_unify_complete T1 T2 s :
@@ -687,12 +733,12 @@ Proof.
   have H : forall s L, bound_subst_seq L s -> forall x T, { subset typ_bv T <= L } -> x \in typ_bv (typ_subst_seq T s) -> x \in L.
   { elim => [ ? ? ? ? | [ y ? ] ? IH ? /= [ HT0 ? ] ? ? HT  ].
     - apply.
-    - apply /IH => // ? /typ_bv_subst [ /HT | [ x [ ] ] ] //=.
+    - apply /IH => // ? /typ_bv_subst_elim [ /HT | [ x ] ] //=.
       by case (x == y) => // /HT0. }
-  destruct (typ_unify_outer (size (typ_enum_fv (typ_enum_fv [::] T2) T1)) T1 T2 [::]) eqn:Hunify; inversion 1 => ? x Hbv.
-  have : x \in typ_enum_bv (typ_enum_bv [::] T2) T1.
+  destruct (typ_unify_outer (size (typ_enum_fv T1 (typ_enum_fv T2 [::]))) T1 T2 [::]) eqn:Hunify; inversion 1 => ? x Hbv.
+  have : x \in typ_enum_bv T1 (typ_enum_bv T2 [::]).
   { apply: H Hbv => //.
-    apply: typ_unify_outer_bound Hunify => // ?; rewrite !typ_enum_bv_inE => -> //.
+    apply: typ_unify_outer_bound Hunify => // ?; rewrite !typ_enum_bv_inE_aux => -> //.
     by rewrite orbT. }
-  rewrite !typ_enum_bv_inE in_nil => /orP [ -> | /orP [ -> | // ] ]; eauto.
+  rewrite !typ_enum_bv_inE_aux in_nil => /orP [ -> | /orP [ -> | // ] ]; eauto.
 Qed.

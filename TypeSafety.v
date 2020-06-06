@@ -29,22 +29,22 @@ Proof.
   induction 1 => /= s0 G' Hnth; eauto.
   - move: (Hnth _ _ H) => [ L Hs' ].
     rewrite -(env_subst_fvar G') -(typ_subst_fvar T)
-    -(env_subst_ext (fun x => if x <= maximum (env_enum_fv (typ_enum_fv L T) G') then typ_fvar x else s (x - maximum (env_enum_fv (typ_enum_fv L T) G')).-1)) => [ | ? Hin ].
-    + rewrite -(typ_subst_ext (fun x => if x <= maximum (env_enum_fv (typ_enum_fv L T) G') then typ_fvar x else s (x - maximum (env_enum_fv (typ_enum_fv L T) G')).-1)) => [ | ? Hin ].
-      { rewrite -(typ_open_ext (typ_subst (fun x => if x <= maximum (env_enum_fv (typ_enum_fv L T) G') then typ_fvar x else s (x - maximum (env_enum_fv (typ_enum_fv L T) G')).-1) \o (typ_fvar \o addn (maximum (env_enum_fv (typ_enum_fv L T) G')).+1))) => [ | ? /typ_bv_subst [ ? | [ z [ ] ] ] /= ].
+    -(env_subst_ext (fun x => if x <= maximum (env_enum_fv G' (typ_enum_fv T L)) then typ_fvar x else s (x - maximum (env_enum_fv G' (typ_enum_fv T L))).-1)) => [ | ? Hin ].
+    + rewrite -(typ_subst_ext (fun x => if x <= maximum (env_enum_fv G' (typ_enum_fv T L)) then typ_fvar x else s (x - maximum (env_enum_fv G' (typ_enum_fv T L))).-1)) => [ | ? Hin ].
+      { rewrite -(typ_open_ext (typ_subst (fun x => if x <= maximum (env_enum_fv G' (typ_enum_fv T L)) then typ_fvar x else s (x - maximum (env_enum_fv G' (typ_enum_fv T L))).-1) \o (typ_fvar \o addn (maximum (env_enum_fv G' (typ_enum_fv T L))).+1))) => [ | ? /typ_bv_subst_elim [ ? | [ z ] ] /= ].
         - rewrite -typ_subst_open_distr => [ | z ? ? ].
           + apply /typed_subst_typ => [ | z ? ].
             * apply Hs' => y. repeat eexists. apply /negP => Hin.
-              have : (maximum (env_enum_fv (typ_enum_fv L T) G')).+1 + y <= (maximum (env_enum_fv (typ_enum_fv L T) G')).
+              have : (maximum (env_enum_fv G' (typ_enum_fv T L))).+1 + y <= (maximum (env_enum_fv G' (typ_enum_fv T L))).
               { apply /maximum_sup.
-                by rewrite env_enum_fv_inE typ_enum_fv_inE Hin !orbT. }
+                by rewrite env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin !orbT. }
               by rewrite addSn ltnNge leq_addr.
-            * case (z <= maximum (env_enum_fv (typ_enum_fv L T) G')) => //. exact /H0.
-          + case (z <= maximum (env_enum_fv (typ_enum_fv L T) G')) => //. by rewrite H0.
+            * case (z <= maximum (env_enum_fv G' (typ_enum_fv T L))) => //. exact /H0.
+          + case (z <= maximum (env_enum_fv G' (typ_enum_fv T L))) => //. by rewrite H0.
         - by rewrite addSn ltnNge leq_addr /= subSKn addnC addnK.
-        - case (z <= maximum (env_enum_fv (typ_enum_fv L T) G')) => //. by rewrite H0. }
-      by rewrite maximum_sup // env_enum_fv_inE typ_enum_fv_inE Hin !orbT.
-    + by rewrite maximum_sup // env_enum_fv_inE typ_enum_fv_inE Hin.
+        - case (z <= maximum (env_enum_fv G' (typ_enum_fv T L))) => //. by rewrite H0. }
+      by rewrite maximum_sup // env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin !orbT.
+    + by rewrite maximum_sup // env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin.
   - apply /typed_abs; eauto.
     apply /IHtyped => [ [ ? /(_ (typ_fvar 0)) /= -> | ? ? /= /Hnth [ L ? ] ] ].
     + exists [::] => ? Hs. apply /typed_var => //= x. by case (Hs x) => ? [ -> ].
