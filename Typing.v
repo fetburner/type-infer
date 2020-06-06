@@ -151,7 +151,7 @@ Inductive typed : env -> trm -> typ -> Prop :=
       typed G t2 T1 ->
       typed G (trm_app t1 t2) T2
   | typed_let (L : seq nat) G t1 t2 T1 T2 :
-      (forall s, (forall x, exists y, s x = typ_fvar y /\ y \notin L) -> typed G t1 (typ_open s T1)) ->
+      (forall s, (forall x, exists2 y, s x = typ_fvar y & y \notin L) -> typed G t1 (typ_open s T1)) ->
       typed (T1 :: G) t2 T2 ->
       typed G (trm_let t1 t2) T2.
 Hint Constructors typed.
@@ -219,13 +219,13 @@ Proof.
     + rewrite typ_open_subst_distr => [ | x ? ? ].
       { rewrite -(typ_subst_ext (fun x => if (x \notin env_fv G) && (x \notin typ_fv T1) then typ_fvar x else s0 x)) => [ | /= ? /typ_fv_open_elim [ -> /= | [ x [ ] ] ] ].
         - rewrite -(env_subst_ext (fun x => if (x \notin env_fv G) && (x \notin typ_fv T1) then typ_fvar x else s0 x)) => [ | ? -> // ].
-          apply H0 => x.
-          + case (Hs' x) => ? [ -> ].
+          apply H0 => [ x | x ? ].
+          + case (Hs' x) => ? ->.
             rewrite env_enum_fv_inE_aux typ_enum_fv_inE_aux !negb_or => /andP [ ? /andP [ ] ]. eauto.
-          + by case ((x \notin env_fv G) && (x \notin typ_fv T1)).
+          + by rewrite 3!fun_if Hclosed /= if_same.
         - rewrite andbF typ_open_bvar_eq => // ?.
           by rewrite Hclosed.
-        - case (Hs' x) => ? [ -> /= ].
+        - case (Hs' x) => ? -> /=.
           rewrite env_enum_fv_inE_aux typ_enum_fv_inE_aux !negb_or inE => /andP [ HG /andP [ HT1 ? ] ] /eqP ?.
           subst. by rewrite HG HT1. }
       case (Hs' x) => ? [ -> /= ].
@@ -337,7 +337,7 @@ Proof.
           + apply /typed_subst_typ => //= x ?.
             rewrite typ_bv_open.
             apply /negbTE /negP => /hasP [ y ].
-            case (Hs y) => ? [ -> // ].
+            case (Hs y) => ? -> //.
           + rewrite typ_open_bvar_eq => // ?.
             by rewrite Hclosed2.
         - by rewrite (typed_closed _ _ _ Htyped1). }

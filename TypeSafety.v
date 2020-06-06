@@ -22,7 +22,7 @@ Lemma typed_subst G t T :
   forall s G',
   ( forall x T, (forall d, nth d G x = T) ->
     exists (L : seq _), forall s',
-    (forall x, exists y, s' x = typ_fvar y /\ y \notin L) ->
+    (forall x, exists2 y, s' x = typ_fvar y & y \notin L) ->
     typed G' (s x) (typ_open s' T) ) ->
   typed G' t.[s] T.
 Proof.
@@ -39,19 +39,19 @@ Proof.
               { apply /maximum_sup.
                 by rewrite env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin !orbT. }
               by rewrite addSn ltnNge leq_addr.
-            * case (z <= maximum (env_enum_fv G' (typ_enum_fv T L))) => //. exact /H0.
-          + case (z <= maximum (env_enum_fv G' (typ_enum_fv T L))) => //. by rewrite H0.
+            * by rewrite 3!fun_if /= H0 if_same.
+          + by rewrite 3!fun_if /= H0 if_same.
         - by rewrite addSn ltnNge leq_addr /= subSKn addnC addnK.
-        - case (z <= maximum (env_enum_fv G' (typ_enum_fv T L))) => //. by rewrite H0. }
+        - by rewrite 3!fun_if /= H0 if_same. }
       by rewrite maximum_sup // env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin !orbT.
     + by rewrite maximum_sup // env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin.
   - apply /typed_abs; eauto.
     apply /IHtyped => [ [ ? /(_ (typ_fvar 0)) /= -> | ? ? /= /Hnth [ L ? ] ] ].
-    + exists [::] => ? Hs. apply /typed_var => //= x. by case (Hs x) => ? [ -> ].
+    + exists [::] => ? Hs. apply /typed_var => //= x. by case (Hs x) => ? ->.
     + exists L => ? ?. apply /typed_rename; eauto.
   - apply /typed_let; eauto.
     apply /IHtyped => [ [ ? /(_ (typ_fvar 0)) /= -> | ? ? /= /Hnth [ L' ? ] ] ].
-    + exists L => ? Hs. apply /typed_var => //= x. by case (Hs x) => ? [ -> ].
+    + exists L => ? Hs. apply /typed_var => //= x. by case (Hs x) => ? ->.
     + exists L' => ? ?. apply /typed_rename; eauto.
 Qed.
 
@@ -77,7 +77,6 @@ Lemma canonical_arrow v T1 T2 :
   value v ->
   typed nil v (typ_arrow T1 T2) ->
   exists t, v = trm_abs t.
-
 Proof. inversion 1; eauto. Qed.
 
 Lemma progress t : forall T,
