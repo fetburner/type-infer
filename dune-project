@@ -3,6 +3,8 @@
 
 (name coq-type-infer)
 
+(generate_opam_files true)
+
 (license MIT)
 (authors "Masayuki Mizuno <mizuno@wantedly.com>")
 (maintainers "Masayuki Mizuno <mizuno@wantedly.com>")
