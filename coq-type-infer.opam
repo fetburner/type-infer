@@ -7,13 +7,12 @@ license: "MIT"
 homepage: "https://github.com/fetburner/type-infer"
 bug-reports: "https://github.com/fetburner/type-infer/issues"
 depends: [
-  "dune" {>= "2.7"}
+  "dune" {>= "2.5"}
   "coq" {>= "8.8"}
   "coq-mathcomp-ssreflect" {>= "1.7"}
-  "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {dev}
+  ["dune" "subst"] {pinned}
   [
     "dune"
     "build"

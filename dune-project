@@ -1,4 +1,4 @@
-(lang dune 2.7)
+(lang dune 2.5)
 (using coq 0.2)
 
 (name coq-type-infer)
@@ -14,6 +14,6 @@
   (name coq-type-infer)
   (synopsis "A formal verification of algorithm W")
   (depends
-    (coq (>= 8.8))
+    (coq (>= 8.6))
     (coq-mathcomp-ssreflect (>= 1.7))))
 
