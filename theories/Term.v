@@ -33,7 +33,7 @@ Next Obligation.
   intros; f_equal; eauto using eq_upren, eq_upnren.
 Qed.
 
-Program Instance RenameLemmasTrm : RenameLemmas trm.
+Program Instance TrmRenameLemmas : RenameLemmas trm.
 Next Obligation.
   induction t => /=; f_equal;
   eauto using rename_id_upren, rename_id_upnren.
@@ -56,13 +56,13 @@ Fixpoint trm_subst s t :=
   | trm_let t1 t2 => trm_let (trm_subst s t1) (trm_subst (up s) t2)
   end.
 
-Program Instance SubstTrm : Subst trm := { subst := trm_subst }.
+Program Instance TrmSubst : Subst trm := { subst := trm_subst }.
 Next Obligation.
   elim: t s s' H => /=; intros; f_equal;
   eauto using eq_up, eq_upn.
 Qed.
 
-Program Instance SubstLemmasTrm : SubstLemmas trm.
+Program Instance TrmSubstLemmas : SubstLemmas trm.
 Next Obligation.
   elim: t => /=; intros; f_equal;
   eauto using subst_id_up, subst_id_upn.
@@ -72,17 +72,17 @@ Next Obligation.
   eauto using rename_subst_up, rename_subst_upn.
 Qed.
 Next Obligation.
-  elim: t r s => /=; intros; f_equal; rewrite ?size_map;
+  elim: t r s => /=; intros; f_equal;
   eauto using subst_rename_comp_up, subst_rename_comp_upn.
 Qed.
 Next Obligation.
-  elim: t r s => /=; intros; f_equal; rewrite ?size_map;
+  elim: t r s => /=; intros; f_equal;
   eauto using rename_subst_comp_up, rename_subst_comp_upn.
 Qed.
 
-Program Instance SubstLemmas'Trm : SubstLemmas' trm.
+Program Instance TrmSubstLemmas' : SubstLemmas' trm.
 Next Obligation.
-  elim: t s s' => /=; intros; f_equal; rewrite ?size_map;
+  elim: t s s' => /=; intros; f_equal;
   eauto using subst_subst_comp_up, subst_subst_comp_upn.
 Qed.
 
