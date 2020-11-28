@@ -1,4 +1,4 @@
 (coq.theory
   (name TypeInfer)
   (package coq-type-infer)
-  (modules Types Term Typing TypeSafety))
+  (modules Util Types Term Typing TypeSafety))

@@ -1,6 +1,5 @@
 From mathcomp Require Import all_ssreflect.
-Require Import Types Term Typing.
-Require Import Autosubst.Autosubst.
+Require Import Util Types Term Typing.
 
 Lemma typed_rename M G t T :
   typed M G t T ->
@@ -25,7 +24,7 @@ Lemma typed_subst M G t T :
     exists (L : seq _), forall s',
     (forall x, exists2 y, s' x = typ_fvar y & y \notin L) ->
     typed M G' (s x) (typ_open s' T) ) ->
-  typed M G' t.[s] T.
+  typed M G' (subst s t) T.
 Proof.
   induction 1 => /= s0 G' Hnth; eauto.
   - move: (Hnth _ _ H) => [ L Hs' ].
@@ -64,7 +63,7 @@ Corollary typed_subst_single M G t t0 T T0 :
   (forall s',
     (forall x, exists2 y, s' x = typ_fvar y & y \notin L) ->
     typed M G t0 (typ_open s' T0)) ->
-  typed M G t.[t0/] T.
+  typed M G (subst (scons t0 var) t) T.
 Proof.
   move => /typed_subst Hsubst ? ?.
   apply /Hsubst => [ [ ? /(_ typ_unit) <- /= | /= ? ? ? ] ]; eauto.

@@ -1,21 +1,90 @@
-Require Import Autosubst.Autosubst.
 From mathcomp Require Import all_ssreflect.
+Require Import Program.
+Require Import Util.
 
 Inductive trm :=
   | trm_unit
-  | trm_var (n : var)
+  | trm_var (n : nat)
   | trm_loc (l : nat)
-  | trm_abs (t : { bind trm })
+  | trm_abs (t : trm)
   | trm_app (t1 t2 : trm)
   | trm_ref (t : trm)
   | trm_deref (t : trm)
   | trm_update (t1 t2 : trm)
-  | trm_let (t1 : trm) (t2 : { bind trm }).
+  | trm_let (t1 t2 : trm).
 
-Instance Ids_trm : Ids trm. derive. Defined.
-Instance Rename_trm : Rename trm. derive. Defined.
-Instance Subst_trm : Subst trm. derive. Defined.
-Instance SubstLemmas_trm : SubstLemmas trm. derive. Qed.
+Fixpoint trm_rename r t :=
+  match t with
+  | trm_unit => trm_unit
+  | trm_var n => trm_var (r n)
+  | trm_loc l => trm_loc l
+  | trm_abs t => trm_abs (trm_rename (upren r) t)
+  | trm_app t1 t2 => trm_app (trm_rename r t1) (trm_rename r t2)
+  | trm_ref t1 => trm_ref (trm_rename r t1)
+  | trm_deref t1 => trm_deref (trm_rename r t1)
+  | trm_update t1 t2 => trm_update (trm_rename r t1) (trm_rename r t2)
+  | trm_let t1 t2 => trm_let (trm_rename r t1) (trm_rename (upren r) t2)
+  end.
+
+Program Instance TrmRename : Rename trm :=
+  { var := trm_var; rename := trm_rename }.
+Next Obligation.
+  elim: t r r' H => /=;
+  intros; f_equal; eauto using eq_upren, eq_upnren.
+Qed.
+
+Program Instance RenameLemmasTrm : RenameLemmas trm.
+Next Obligation.
+  induction t => /=; f_equal;
+  eauto using rename_id_upren, rename_id_upnren.
+Qed.
+Next Obligation.
+  elim: t r r' => /=; intros; f_equal; rewrite ?size_map;
+  eauto using rename_rename_comp_upren, rename_rename_comp_upnren.
+Qed.
+
+Fixpoint trm_subst s t :=
+  match t with
+  | trm_unit => trm_unit
+  | trm_var n => s n
+  | trm_loc l => trm_loc l
+  | trm_abs t => trm_abs (trm_subst (up s) t)
+  | trm_app t1 t2 => trm_app (trm_subst s t1) (trm_subst s t2)
+  | trm_ref t => trm_ref (trm_subst s t)
+  | trm_deref t => trm_deref (trm_subst s t)
+  | trm_update t1 t2 => trm_update (trm_subst s t1) (trm_subst s t2)
+  | trm_let t1 t2 => trm_let (trm_subst s t1) (trm_subst (up s) t2)
+  end.
+
+Program Instance SubstTrm : Subst trm := { subst := trm_subst }.
+Next Obligation.
+  elim: t s s' H => /=; intros; f_equal;
+  eauto using eq_up, eq_upn.
+Qed.
+
+Program Instance SubstLemmasTrm : SubstLemmas trm.
+Next Obligation.
+  elim: t => /=; intros; f_equal;
+  eauto using subst_id_up, subst_id_upn.
+Qed.
+Next Obligation.
+  elim: t r => /=; intros; f_equal;
+  eauto using rename_subst_up, rename_subst_upn.
+Qed.
+Next Obligation.
+  elim: t r s => /=; intros; f_equal; rewrite ?size_map;
+  eauto using subst_rename_comp_up, subst_rename_comp_upn.
+Qed.
+Next Obligation.
+  elim: t r s => /=; intros; f_equal; rewrite ?size_map;
+  eauto using rename_subst_comp_up, rename_subst_comp_upn.
+Qed.
+
+Program Instance SubstLemmas'Trm : SubstLemmas' trm.
+Next Obligation.
+  elim: t s s' => /=; intros; f_equal; rewrite ?size_map;
+  eauto using subst_subst_comp_up, subst_subst_comp_upn.
+Qed.
 
 Definition value v :=
   match v with
@@ -28,13 +97,13 @@ Definition value v :=
 Lemma value_rename : forall r v, value (rename r v) = value v.
 Proof. by move => ? [ ]. Qed.
 
-Lemma value_subst : forall s v, value v -> value v.[s].
+Lemma value_subst : forall s v, value v -> value (subst s v).
 Proof. by move => ? [ ]. Qed.
 
 Inductive cbv H : trm -> seq trm -> trm -> Prop :=
   | cbv_app t11 v2 :
       value v2 ->
-      cbv H (trm_app (trm_abs t11) v2) H t11.[v2/]
+      cbv H (trm_app (trm_abs t11) v2) H (subst (scons v2 var) t11)
   | cbv_app_1 H' t1 t1' t2 :
       cbv H t1 H' t1' ->
       cbv H (trm_app t1 t2) H' (trm_app t1' t2)
@@ -66,7 +135,7 @@ Inductive cbv H : trm -> seq trm -> trm -> Prop :=
       cbv H (trm_update v1 t2) H' (trm_update v1 t2')
   | cbv_let v1 t2 :
       value v1 ->
-      cbv H (trm_let v1 t2) H t2.[v1/]
+      cbv H (trm_let v1 t2) H (subst (scons v1 var) t2)
   | cbv_let_1 H' t1 t1' t2 :
       cbv H t1 H' t1' ->
       cbv H (trm_let t1 t2) H' (trm_let t1' t2).
