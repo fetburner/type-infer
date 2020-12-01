@@ -195,11 +195,11 @@ Lemma typed_weaken M G t T :
   typed M G t T ->
   forall M' G',
   (forall x T, (forall d, nth d M x = T) -> (forall d, nth d M' x = T)) ->
-  (forall x T, (forall d, nth d G x = T) -> exists s T', (forall d, nth d G' x = T') /\ T = typ_open s T') ->
+  (forall x T, (forall d, nth d G x = T) -> exists2 '(s, T'), (forall d, nth d G' x = T') & T = typ_open s T') ->
   typed M' G' t T.
 Proof.
   induction 1 => /= M' G' HM' HG'; eauto.
-  - case (HG' _ _ H) => ? [ ? [ ? -> ] ].
+  - case (HG' _ _ H) => [ [ ? ? ] ? -> ].
     rewrite typ_open_comp.
     apply /typed_var => // ? n.
     rewrite typ_bv_open.
@@ -207,16 +207,18 @@ Proof.
     by rewrite H0 inE.
   - apply /typed_abs => //.
     apply /IHtyped => [ | [ ? | ] /= ]; eauto.
-    repeat (eexists; eauto). exact /Logic.eq_sym /typ_open_bvar.
+    eexists (_, _); eauto.
+    exact /Logic.eq_sym /typ_open_bvar.
   - apply /typed_let; eauto.
     apply /IHtyped => [ | [ ? | ] /= ]; eauto.
-    repeat (eexists; eauto). exact /Logic.eq_sym /typ_open_bvar.
+    eexists (_, _); eauto.
+    exact /Logic.eq_sym /typ_open_bvar.
 Qed.
 
 Corollary typed_weaken_env M G t T :
   typed M G t T ->
   forall G',
-  (forall x T, (forall d, nth d G x = T) -> exists s T', (forall d, nth d G' x = T') /\ T = typ_open s T') ->
+  (forall x T, (forall d, nth d G x = T) -> exists2 '(s, T'), (forall d, nth d G' x = T') & T = typ_open s T') ->
   typed M G' t T.
 Proof.
   move => Htyped ?.
@@ -231,8 +233,8 @@ Corollary typed_weaken_store M G t T :
 Proof.
   move => Htyped ? Hstore.
   apply /(typed_weaken _ _ _ _ Htyped _ _ Hstore) => ? ? ?.
-  exists typ_bvar. eexists.
-  rewrite typ_open_bvar. eauto.
+  eexists (typ_bvar, _); eauto.
+  by rewrite typ_open_bvar.
 Qed.
 
 Lemma typed_subst_typ M G t T :
@@ -573,7 +575,6 @@ Proof.
     have : forall x, typ_bv (s2 x) =i pred0 => [ ? x | Hs2bv ].
     { apply /negbTE /negP => /(typ_bv_unify _ _ _ Hunify) => /= /orP.
       by rewrite HT'bv. }
-
     exists (n1'.+1), (typ_subst s2 \o s1), s'', (s2 n1').
     (repeat split) => [ | | | ? ? | ? ? /typ_fv_subst_elim [ ? /(typ_fv_unify _ _ _ Hunify) /= [ -> /Hs1fv [ -> | ] | [ /HTfv | /eqP -> ] ] ] | ? /(typ_fv_unify _ _ _ Hunify) [ -> | [ /HTfv | /eqP -> ] ] | ? Hlt ]; eauto.
     + by rewrite -(Hgen (typ_fvar n1')) /= ltnn.
@@ -629,8 +630,7 @@ Proof.
         rewrite typ_subst_open_distr => [ | x Hin ? ].
         + rewrite typ_subst_fvar_eq => [ | x Hin ].
           { rewrite typ_open_bvar_eq => [ -> | ? ? /= ].
-            - exists (typ_subst (fun x => if x <= maximum (env_enum_fv (env_subst s G) (typ_enum_fv T1 L)) then typ_fvar x else typ_bvar (x - (maximum (env_enum_fv (env_subst s G) (typ_enum_fv T1 L))).+1)) \o s').
-              repeat eexists.
+            - eexists (typ_subst (fun x => if x <= maximum (env_enum_fv (env_subst s G) (typ_enum_fv T1 L)) then typ_fvar x else typ_bvar (x - (maximum (env_enum_fv (env_subst s G) (typ_enum_fv T1 L))).+1)) \o s', _); eauto.
               rewrite !typ_subst_comp typ_open_subst_distr => [ | ? ].
               + rewrite typ_open_bvar_eq => [ | ? ].
                 { apply /typ_subst_ext => x ? /=.
@@ -649,7 +649,7 @@ Proof.
           by rewrite maximum_sup // env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin orbT.
         + by rewrite maximum_sup // env_enum_fv_inE_aux typ_enum_fv_inE_aux Hin orbT.
       - rewrite env_subst_comp (env_subst_ext (typ_subst s' \o s1) s) => [ | ? /HG /Hs // ].
-        repeat eexists.
+        eexists (_, _).
         + exact /Hnth.
         + exact /Logic.eq_sym /typ_open_bvar. }
     exists n2', (typ_subst s2 \o s1), s'', T2'.
