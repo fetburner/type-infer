@@ -5,14 +5,56 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: "Coq ${{ matrix.coq-version }} / MathComp 1.19.0"
+    name: "Coq ${{ matrix.version }} / MathComp 1.19.0"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        coq-version: ["8.16.1", "8.18.0", "8.19.2"]
+        include:
+          - version: "8.16.1"
+            image: mathcomp/mathcomp:1.19.0-coq-8.16@sha256:928fcf2009527b0bffdbdf72766012922758bebf764ee30d3582920f14702b57
+          - version: "8.18.0"
+            image: mathcomp/mathcomp:1.19.0-coq-8.18@sha256:33227713fd4f8617259a3c382eadced1b51e23d7966fa2f43914ccc7ad056238
+          - version: "8.19.2"
+            image: mathcomp/mathcomp:1.19.0-coq-8.19@sha256:820e58054bcdd31eaeec2d023a585f99bbee742771a363fe8931b49643bb7a6c
+    container:
+      image: ${{ matrix.image }}
+      # Actions needs access to runner-owned files; build as the image's coq user.
+      options: --user 0
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Inspect container environment before checkout
+        run: |
+          set -eux
+          cat /etc/os-release
+          getconf GNU_LIBC_VERSION
+          id
+          id coq
+          printf 'HOME=%s\nGITHUB_WORKSPACE=%s\n' "$HOME" "$GITHUB_WORKSPACE"
+          ls -ld "$HOME" /home/coq /home/coq/.opam "$GITHUB_WORKSPACE"
       - uses: actions/checkout@v7
-      - run: bash scripts/run-verification.sh "${{ matrix.coq-version }}"
+        with:
+          persist-credentials: false
+      - name: Verify as coq after root checkout
+        run: |
+          set -eux
+          runuser -u coq -- env HOME=/home/coq SOURCE_DIR="$GITHUB_WORKSPACE" bash --login -c '
+            set -eux
+            work=$(mktemp -d)
+            trap "rm -rf -- \"$work\"" EXIT
+            cp -R "$SOURCE_DIR"/. "$work"/
+            cd "$work"
+            id
+            bash scripts/verify.sh
+          '
+      - name: Check proof files unchanged
+        run: |
+          git -c safe.directory="$GITHUB_WORKSPACE" -C "$GITHUB_WORKSPACE" diff --exit-code HEAD -- theories
