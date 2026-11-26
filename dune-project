@@ -14,6 +14,6 @@
   (name coq-type-infer)
   (synopsis "A formal verification of algorithm W")
   (depends
-    (coq (>= 8.8))
-    (coq-mathcomp-ssreflect (>= 1.11))))
+    (coq (or (and (>= 8.16.1) (< 8.17)) (and (>= 8.18) (< 8.20))))
+    (coq-mathcomp-ssreflect (and (>= 1.19.0) (< 2.0)))))
 

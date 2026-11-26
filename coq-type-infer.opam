@@ -8,8 +8,8 @@ homepage: "https://github.com/fetburner/type-infer"
 bug-reports: "https://github.com/fetburner/type-infer/issues"
 depends: [
   "dune" {>= "2.5"}
-  "coq" {>= "8.8"}
-  "coq-mathcomp-ssreflect" {>= "1.11"}
+  "coq" {(>= "8.16.1" & < "8.17") | (>= "8.18" & < "8.20")}
+  "coq-mathcomp-ssreflect" {>= "1.19.0" & < "2.0"}
 ]
 build: [
   ["dune" "subst"] {pinned}
