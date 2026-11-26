@@ -1,0 +1,24 @@
+[mcp_servers.rocq]
+command = "docker"
+cwd = "."
+args = [
+  "run",
+  "--rm",
+  "-i",
+  "--platform",
+  "linux/amd64",
+  "-v",
+  ".:/workspace",
+  "-w",
+  "/workspace",
+  "-e",
+  "ROCQ_WORKSPACE=/workspace",
+  "-e",
+  "ROCQ_DUNE_BUILD=1",
+  "type-infer-rocq-mcp:8.19.2",
+  "/bin/bash",
+  "-lc",
+  "exec /workspace/.rocq-mcp/venv/bin/rocq-mcp",
+]
+startup_timeout_sec = 30
+tool_timeout_sec = 300
