@@ -7,8 +7,12 @@ on:
 
 jobs:
   build:
-    name: Coq 8.19.2 / MathComp 1.19.0
+    name: "Coq ${{ matrix.coq-version }} / MathComp 1.19.0"
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        coq-version: ["8.16.1", "8.18.0", "8.19.2"]
     steps:
       - uses: actions/checkout@v7
-      - run: bash scripts/run-verification.sh
+      - run: bash scripts/run-verification.sh "${{ matrix.coq-version }}"
