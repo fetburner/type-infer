@@ -3,11 +3,10 @@ set -eux
 
 coqc --version
 opam --version
+opam list --installed --columns=name,version
 
-# No `opam update`: today's opam-repository no longer ships
-# ocaml-variants.4.07.1+flambda, so updating breaks the switch
-# invariant and the solver fails (exit 20). Use the repo state
-# bundled in the image instead.
+# Use the repository snapshot and dependencies bundled in the pinned image.
+# Do not update opam repositories during verification.
 opam pin add coq-type-infer . --kind=path --no-action -y
 opam install coq-type-infer --deps-only -y
 opam install coq-type-infer -v -y
