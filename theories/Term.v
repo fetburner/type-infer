@@ -36,11 +36,11 @@ Qed.
 Program Instance TrmRenameLemmas : RenameLemmas trm.
 Next Obligation.
   induction t => /=; f_equal;
-  eauto using rename_id_upren, rename_id_upnren.
+  pose proof rename_id_upren; pose proof rename_id_upnren; eauto.
 Qed.
 Next Obligation.
   elim: t r r' => /=; intros; f_equal; rewrite ?size_map;
-  eauto using rename_rename_comp_upren, rename_rename_comp_upnren.
+  pose proof rename_rename_comp_upren; pose proof rename_rename_comp_upnren; eauto.
 Qed.
 
 Fixpoint trm_subst s t :=
@@ -59,31 +59,31 @@ Fixpoint trm_subst s t :=
 Program Instance TrmSubst : Subst trm := { subst := trm_subst }.
 Next Obligation.
   elim: t s s' H => /=; intros; f_equal;
-  eauto using eq_up, eq_upn.
+  pose proof eq_up; pose proof eq_upn; eauto.
 Qed.
 
 Program Instance TrmSubstLemmas : SubstLemmas trm.
 Next Obligation.
   elim: t => /=; intros; f_equal;
-  eauto using subst_id_up, subst_id_upn.
+  pose proof subst_id_up; pose proof subst_id_upn; eauto.
 Qed.
 Next Obligation.
   elim: t r => /=; intros; f_equal;
-  eauto using rename_subst_up, rename_subst_upn.
+  pose proof rename_subst_up; pose proof rename_subst_upn; eauto.
 Qed.
 Next Obligation.
   elim: t r s => /=; intros; f_equal;
-  eauto using subst_rename_comp_up, subst_rename_comp_upn.
+  pose proof subst_rename_comp_up; pose proof subst_rename_comp_upn; eauto.
 Qed.
 Next Obligation.
   elim: t r s => /=; intros; f_equal;
-  eauto using rename_subst_comp_up, rename_subst_comp_upn.
+  pose proof rename_subst_comp_up; pose proof rename_subst_comp_upn; eauto.
 Qed.
 
 Program Instance TrmSubstLemmas' : SubstLemmas' trm.
 Next Obligation.
   elim: t s s' => /=; intros; f_equal;
-  eauto using subst_subst_comp_up, subst_subst_comp_upn.
+  pose proof subst_subst_comp_up; pose proof subst_subst_comp_upn; eauto.
 Qed.
 
 Definition value v :=

@@ -4,9 +4,9 @@ This is a Coq formalisation of Algorithm W for an ML subset, covering soundness 
 
 ## Verification
 
-GitHub Actions tests Coq 8.16.1, 8.18.0, and 8.19.2 with MathComp SSReflect 1.19.0, the successful combinations with MathComp 1.19.0 in the [compatibility experiment](https://github.com/fetburner/type-infer/actions/runs/45751376882). CI runs in native GitHub Actions job containers, using the [verified root-checkout/coq-build approach](https://github.com/fetburner/type-infer/actions/runs/45754523835): checkout runs as root to access runner-owned files; the build runs as `coq` in a temporary source copy with `HOME=/home/coq`. The explicit Git safe-directory setting is scoped to the checked-out workspace.
+GitHub Actions tests Coq 8.16.1, 8.18.0, 8.19.2, and 8.20.1 with MathComp SSReflect 1.19.0. The first three are the successful combinations with MathComp 1.19.0 in the [compatibility experiment](https://github.com/fetburner/type-infer/actions/runs/45751376882); 8.20.1 was added later. CI runs in native GitHub Actions job containers, using the [verified root-checkout/coq-build approach](https://github.com/fetburner/type-infer/actions/runs/45754523835): checkout runs as root to access runner-owned files; the build runs as `coq` in a temporary source copy with `HOME=/home/coq`. The explicit Git safe-directory setting is scoped to the checked-out workspace.
 
-Locally, run `bash scripts/run-verification.sh [version]` (default: 8.19.2); Docker is required. CI and the local script pin the same tested image digests, and both invoke `scripts/verify.sh` to build and install the package via opam/Dune. Keep the matrix images and local script pins in sync.
+Locally, run `bash scripts/run-verification.sh [version]` (default: 8.20.1); Docker is required. CI and the local script pin the same tested image digests, and both invoke `scripts/verify.sh` to build and install the package via opam/Dune. Keep the matrix images and local script pins in sync.
 
 `scripts/verify.sh` also kernel-checks the installed library with `coqchk -o` and fails if the context summary names any `TypeInfer` constant: an `Admitted` proof, an axiom, or a bypassed guard/positivity check. Never leave `Admitted`, `admit`, or new axioms in `theories/*.v`.
 
@@ -29,4 +29,6 @@ Build with `opam exec --switch=type-infer -- dune build`. The `rocq` MCP server 
 
 The historical Coq 8.8–8.12 matrix was used for the initial CI port. The dependency-only upgrade targets Coq 8.16, 8.18–8.19 and MathComp 1.19 without changes to `theories/*.v`. Coq 8.17 is excluded for now because its tested release failed on the deprecated instance locality diagnostic.
 
-Treat further upgrades to Coq 8.20, MathComp 2.x (Hierarchy Builder), and Rocq 9.x as separate changes. Keep CI green at each step and update dependency constraints, the pinned verification image, and the generated opam metadata together.
+Coq 8.20 no longer infers typeclass arguments of lemmas named in `auto`/`eauto using` clauses ([coq/coq#18909](https://github.com/coq/coq/pull/18909)). `theories/Term.v` therefore uses `pose proof foo; eauto` instead of `eauto using foo` for lemmas that take `Rename`/`Subst` instances; keep that form in new proofs.
+
+Treat further upgrades to MathComp 2.x (Hierarchy Builder) and Rocq 9.x as separate changes. Keep CI green at each step and update dependency constraints, the pinned verification image, and the generated opam metadata together.
