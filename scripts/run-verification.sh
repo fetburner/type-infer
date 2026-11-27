@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 set -eu
 
-COQ_VERSION="${1:-8.20.1}"
+ROCQ_VERSION="${1:-9.1.1}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Pin the same tested image digests as the CI matrix.
-case "${COQ_VERSION}" in
-  8.16|8.16.1)
-    IMAGE="mathcomp/mathcomp:2.2.0-coq-8.16@sha256:a73d9bc7cc058a02f69eb74422d45aeb518c993f7a0500c6d7587db6923683b7"
+case "${ROCQ_VERSION}" in
+  9.0|9.0.1)
+    IMAGE="mathcomp/mathcomp:2.6.0-rocq-prover-9.0@sha256:53e9ef2c3d85068a2e4c7db84da72faffcef08351107911bab48117fec3247bb"
     ;;
-  8.18|8.18.0)
-    IMAGE="mathcomp/mathcomp:2.2.0-coq-8.18@sha256:74242573b1261215d0c01783f2f32adc5fbb982f09c97890aecee98f327e2a1b"
+  9.1|9.1.1)
+    IMAGE="mathcomp/mathcomp:2.6.0-rocq-prover-9.1@sha256:170e09d5ec507180f9ef93cd9e0ba1b58f422e34df50044462170b26807231b9"
     ;;
-  8.19|8.19.2)
-    IMAGE="mathcomp/mathcomp:2.2.0-coq-8.19@sha256:4528ca6551316685d24b8e4468db981224e7da2507c0d683262363ab50151a86"
+  9.2|9.2.0)
+    IMAGE="mathcomp/mathcomp:2.6.0-rocq-prover-9.2@sha256:a4e066dbe94d40fbbefc2ab7692abb905011a053d1a5434ababee659ffe293e8"
     ;;
-  8.20|8.20.1)
-    IMAGE="mathcomp/mathcomp:2.2.0-coq-8.20@sha256:22627a3f9ce8e0670b044465e6e461d4048d8005a4ad919aa73f3eda12ccf8ca"
+  9.3|9.3.0)
+    IMAGE="mathcomp/mathcomp:2.6.0-rocq-prover-9.3@sha256:6bf12b95e479f557c1a83cbe602975e84155ec8e9676a84403cf23b65f8f9842"
     ;;
   *)
-    echo "Unsupported Coq version: ${COQ_VERSION} (expected 8.16.1, 8.18.0, 8.19.2, or 8.20.1)" >&2
+    echo "Unsupported Rocq version: ${ROCQ_VERSION} (expected 9.0.1, 9.1.1, 9.2.0, or 9.3.0)" >&2
     exit 1
     ;;
 esac
 
 # opam path pins build an internal copy, so the source can remain read-only.
-docker run --rm -v "${REPO_ROOT}:/home/project:ro" -w /home/project "${IMAGE}" /bin/bash --login -c "bash scripts/verify.sh"
+docker run --rm --platform linux/amd64 -v "${REPO_ROOT}:/home/project:ro" -w /home/project "${IMAGE}" /bin/bash --login -c "bash scripts/verify.sh"

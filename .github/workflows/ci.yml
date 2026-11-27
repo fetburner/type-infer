@@ -10,24 +10,24 @@ permissions:
 
 jobs:
   build:
-    name: "Coq ${{ matrix.version }} / MathComp 2.2.0"
+    name: "Rocq ${{ matrix.version }} / MathComp 2.6.0"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         include:
-          - version: "8.16.1"
-            image: mathcomp/mathcomp:2.2.0-coq-8.16@sha256:a73d9bc7cc058a02f69eb74422d45aeb518c993f7a0500c6d7587db6923683b7
-          - version: "8.18.0"
-            image: mathcomp/mathcomp:2.2.0-coq-8.18@sha256:74242573b1261215d0c01783f2f32adc5fbb982f09c97890aecee98f327e2a1b
-          - version: "8.19.2"
-            image: mathcomp/mathcomp:2.2.0-coq-8.19@sha256:4528ca6551316685d24b8e4468db981224e7da2507c0d683262363ab50151a86
-          - version: "8.20.1"
-            image: mathcomp/mathcomp:2.2.0-coq-8.20@sha256:22627a3f9ce8e0670b044465e6e461d4048d8005a4ad919aa73f3eda12ccf8ca
+          - version: "9.0.1"
+            image: mathcomp/mathcomp:2.6.0-rocq-prover-9.0@sha256:53e9ef2c3d85068a2e4c7db84da72faffcef08351107911bab48117fec3247bb
+          - version: "9.1.1"
+            image: mathcomp/mathcomp:2.6.0-rocq-prover-9.1@sha256:170e09d5ec507180f9ef93cd9e0ba1b58f422e34df50044462170b26807231b9
+          - version: "9.2.0"
+            image: mathcomp/mathcomp:2.6.0-rocq-prover-9.2@sha256:a4e066dbe94d40fbbefc2ab7692abb905011a053d1a5434ababee659ffe293e8
+          - version: "9.3.0"
+            image: mathcomp/mathcomp:2.6.0-rocq-prover-9.3@sha256:6bf12b95e479f557c1a83cbe602975e84155ec8e9676a84403cf23b65f8f9842
     container:
       image: ${{ matrix.image }}
-      # Actions needs access to runner-owned files; build as the image's coq user.
+      # Actions needs access to runner-owned files; build as the image's rocq user.
       options: --user 0
     defaults:
       run:
@@ -39,16 +39,16 @@ jobs:
           cat /etc/os-release
           getconf GNU_LIBC_VERSION
           id
-          id coq
+          id rocq
           printf 'HOME=%s\nGITHUB_WORKSPACE=%s\n' "$HOME" "$GITHUB_WORKSPACE"
-          ls -ld "$HOME" /home/coq /home/coq/.opam "$GITHUB_WORKSPACE"
+          ls -ld "$HOME" /home/rocq /home/rocq/.opam "$GITHUB_WORKSPACE"
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Verify as coq after root checkout
+      - name: Verify as rocq after root checkout
         run: |
           set -eux
-          runuser -u coq -- env HOME=/home/coq SOURCE_DIR="$GITHUB_WORKSPACE" bash --login -c '
+          runuser -u rocq -- env HOME=/home/rocq SOURCE_DIR="$GITHUB_WORKSPACE" bash --login -c '
             set -eux
             work=$(mktemp -d)
             trap "rm -rf -- \"$work\"" EXIT

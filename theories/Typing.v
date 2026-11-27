@@ -1,5 +1,8 @@
-From mathcomp Require Import all_ssreflect.
+From mathcomp Require Import boot.
 Require Import Types Term.
+
+(* MathComp < 2.4 set this globally; the proofs rely on its goal order. *)
+Set SsrOldRewriteGoalsOrder.
 
 Definition env := list typ.
 Definition store := env.

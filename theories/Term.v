@@ -1,5 +1,5 @@
-From mathcomp Require Import all_ssreflect.
-Require Import Program.
+From mathcomp Require Import boot.
+From Corelib Require Import Program.Tactics.
 Require Import Util.
 
 Inductive trm :=
