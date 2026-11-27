@@ -4,15 +4,15 @@ This is a Coq formalisation of Algorithm W for an ML subset, covering soundness 
 
 ## Verification
 
-GitHub Actions tests Coq 8.16.1, 8.18.0, 8.19.2, and 8.20.1 with MathComp SSReflect 1.19.0. The first three are the successful combinations with MathComp 1.19.0 in the [compatibility experiment](https://github.com/fetburner/type-infer/actions/runs/45751376882); 8.20.1 was added later. CI runs in native GitHub Actions job containers, using the [verified root-checkout/coq-build approach](https://github.com/fetburner/type-infer/actions/runs/45754523835): checkout runs as root to access runner-owned files; the build runs as `coq` in a temporary source copy with `HOME=/home/coq`. The explicit Git safe-directory setting is scoped to the checked-out workspace.
+GitHub Actions tests Coq 8.16.1, 8.18.0, 8.19.2, and 8.20.1 with MathComp SSReflect 2.2.0, the one MathComp 2.x release with images for all four. CI runs in native GitHub Actions job containers, using the [verified root-checkout/coq-build approach](https://github.com/fetburner/type-infer/actions/runs/45754523835): checkout runs as root to access runner-owned files; the build runs as `coq` in a temporary source copy with `HOME=/home/coq`. The explicit Git safe-directory setting is scoped to the checked-out workspace.
 
-Locally, run `bash scripts/run-verification.sh [version]` (default: 8.20.1); Docker is required. CI and the local script pin the same tested image digests, and both invoke `scripts/verify.sh` to build and install the package via opam/Dune. Keep the matrix images and local script pins in sync.
+Locally, run `bash scripts/run-verification.sh [version]` (default: 8.20.1); Docker is required (the images are amd64-only; on Apple Silicon they run under emulation). CI and the local script pin the same tested image digests, and both invoke `scripts/verify.sh` to build and install the package via opam/Dune. Keep the matrix images and local script pins in sync.
 
 `scripts/verify.sh` also kernel-checks the installed library with `coqchk -o` and fails if the context summary names any `TypeInfer` constant: an `Admitted` proof, an axiom, or a bypassed guard/positivity check. Never leave `Admitted`, `admit`, or new axioms in `theories/*.v`.
 
 ## Local development
 
-The local toolchain targets the Rocq 9.1 upgrade: the opam switch `type-infer` has Rocq 9.1, MathComp 2.6.0, and coq-lsp 0.2.5+9.1. Until that upgrade lands, `master` does not build there; use `scripts/run-verification.sh` for the CI versions. One-time setup:
+The local toolchain targets the Rocq 9.1 upgrade: the opam switch `type-infer` has Rocq 9.1, MathComp 2.6.0, and coq-lsp 0.2.5+9.1. Until that upgrade lands, `master` does not build there (Rocq 9 no longer loads `PeanoNat` and friends in the prelude); use `scripts/run-verification.sh` for the CI versions. One-time setup:
 
 ```sh
 opam switch create type-infer ocaml-base-compiler.4.14.2 --no-switch \
@@ -31,4 +31,6 @@ The historical Coq 8.8–8.12 matrix was used for the initial CI port. The depen
 
 Coq 8.20 no longer infers typeclass arguments of lemmas named in `auto`/`eauto using` clauses ([coq/coq#18909](https://github.com/coq/coq/pull/18909)). `theories/Term.v` therefore uses `pose proof foo; eauto` instead of `eauto using foo` for lemmas that take `Rename`/`Subst` instances; keep that form in new proofs.
 
-Treat further upgrades to MathComp 2.x (Hierarchy Builder) and Rocq 9.x as separate changes. Keep CI green at each step and update dependency constraints, the pinned verification image, and the generated opam metadata together.
+MathComp 2 declares structures with Hierarchy Builder: `theories/Types.v` registers `typ` as an `eqType` via `HB.instance Definition _ := hasDecEq.Build typ typ_eqP`; use that form, not the removed `EqMixin`/`EqType`, for new instances.
+
+Treat the Rocq 9.x upgrade (with MathComp 2.4+) as a separate change. Keep CI green at each step and update dependency constraints, the pinned verification image, and the generated opam metadata together.

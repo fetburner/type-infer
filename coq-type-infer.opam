@@ -9,7 +9,7 @@ bug-reports: "https://github.com/fetburner/type-infer/issues"
 depends: [
   "dune" {>= "2.5"}
   "coq" {(>= "8.16.1" & < "8.17") | (>= "8.18" & < "8.21")}
-  "coq-mathcomp-ssreflect" {>= "1.19.0" & < "2.0"}
+  "coq-mathcomp-ssreflect" {>= "2.2.0" & < "2.3"}
 ]
 build: [
   ["dune" "subst"] {pinned}
