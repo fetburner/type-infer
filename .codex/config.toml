@@ -1,4 +1,4 @@
 [mcp_servers.rocq]
 command = "opam"
 cwd = "."
-args = ["exec", "--", "./.rocq-mcp/venv/bin/rocq-mcp"]
+args = ["exec", "--switch=type-infer", "--", "./.rocq-mcp/venv/bin/rocq-mcp"]

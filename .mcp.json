@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rocq": {
+      "command": "opam",
+      "args": ["exec", "--switch=type-infer", "--", "./.rocq-mcp/venv/bin/rocq-mcp"]
+    }
+  }
+}
