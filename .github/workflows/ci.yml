@@ -23,6 +23,8 @@ jobs:
             image: mathcomp/mathcomp:1.19.0-coq-8.18@sha256:33227713fd4f8617259a3c382eadced1b51e23d7966fa2f43914ccc7ad056238
           - version: "8.19.2"
             image: mathcomp/mathcomp:1.19.0-coq-8.19@sha256:820e58054bcdd31eaeec2d023a585f99bbee742771a363fe8931b49643bb7a6c
+          - version: "8.20.1"
+            image: mathcomp/mathcomp:1.19.0-coq-8.20@sha256:268b79f981049a44ac041b00cfe75a8313c56dc1e184096f1e65a0bdb85754f8
     container:
       image: ${{ matrix.image }}
       # Actions needs access to runner-owned files; build as the image's coq user.
