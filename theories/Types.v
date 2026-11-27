@@ -1,5 +1,9 @@
 From HB Require Import structures.
-From mathcomp Require Import all_ssreflect.
+From mathcomp Require Import boot.
+From Stdlib Require Wf_nat.
+
+(* MathComp < 2.4 set this globally; the proofs rely on its goal order. *)
+Set SsrOldRewriteGoalsOrder.
 
 Inductive typ : Set :=
   | typ_unit
@@ -9,7 +13,7 @@ Inductive typ : Set :=
   | typ_arrow (T1 T2 : typ).
 
 Definition typ_eq_dec (T1 T2 : typ) : { T1 = T2 } + { T1 <> T2 }.
-Proof. decide equality; exact: PeanoNat.Nat.eq_dec. Defined.
+Proof. decide equality; exact: eq_comparable. Defined.
 
 Lemma typ_eqP : Equality.axiom typ_eq_dec.
 Proof.

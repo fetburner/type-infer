@@ -1,5 +1,8 @@
-From mathcomp Require Import all_ssreflect.
+From mathcomp Require Import boot.
 Require Import Util Types Term Typing.
+
+(* MathComp < 2.4 set this globally; the proofs rely on its goal order. *)
+Set SsrOldRewriteGoalsOrder.
 
 Lemma typed_rename M G t T :
   typed M G t T ->

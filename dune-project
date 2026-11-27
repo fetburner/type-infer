@@ -14,6 +14,8 @@
   (name coq-type-infer)
   (synopsis "A formal verification of algorithm W")
   (depends
-    (coq (or (and (>= 8.16.1) (< 8.17)) (and (>= 8.18) (< 8.21))))
-    (coq-mathcomp-ssreflect (and (>= 2.2.0) (< 2.3)))))
+    (rocq-core (and (>= 9.0) (< 9.4)))
+    (rocq-stdlib (>= 9.0))
+    (coq-core (>= 9.0))
+    (rocq-mathcomp-boot (and (>= 2.6.0) (< 2.7)))))
 
