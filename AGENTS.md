@@ -8,6 +8,8 @@ GitHub Actions tests Coq 8.16.1, 8.18.0, and 8.19.2 with MathComp SSReflect 1.19
 
 Locally, run `bash scripts/run-verification.sh [version]` (default: 8.19.2); Docker is required. CI and the local script pin the same tested image digests, and both invoke `scripts/verify.sh` to build and install the package via opam/Dune. Keep the matrix images and local script pins in sync.
 
+`scripts/verify.sh` also kernel-checks the installed library with `coqchk -o` and fails if the context summary names any `TypeInfer` constant: an `Admitted` proof, an axiom, or a bypassed guard/positivity check. Never leave `Admitted`, `admit`, or new axioms in `theories/*.v`.
+
 ## Upgrade boundaries
 
 The historical Coq 8.8–8.12 matrix was used for the initial CI port. The dependency-only upgrade targets Coq 8.16, 8.18–8.19 and MathComp 1.19 without changes to `theories/*.v`. Coq 8.17 is excluded for now because its tested release failed on the deprecated instance locality diagnostic.
