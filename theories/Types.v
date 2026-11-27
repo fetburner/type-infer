@@ -1,3 +1,4 @@
+From HB Require Import structures.
 From mathcomp Require Import all_ssreflect.
 
 Inductive typ : Set :=
@@ -16,8 +17,7 @@ Proof.
   by case (typ_eq_dec T1 T2) => ?; [ left | right ].
 Qed.
 
-Definition typ_eqMixin := EqMixin typ_eqP.
-Canonical typ_eqType := Eval hnf in EqType typ typ_eqMixin.
+HB.instance Definition _ := hasDecEq.Build typ typ_eqP.
 
 Fixpoint typ_fv T : pred nat :=
   match T with
